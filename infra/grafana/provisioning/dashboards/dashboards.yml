@@ -1,0 +1,9 @@
+apiVersion: 1
+
+providers:
+  - name: OpenEval
+    folder: OpenEval
+    type: file
+    updateIntervalSeconds: 30
+    options:
+      path: /var/lib/grafana/dashboards

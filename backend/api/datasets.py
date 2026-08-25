@@ -7,10 +7,12 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, status
 from sqlalchemy.orm import Session
 
 from api.deps import get_current_user
+from core.config import settings
 from core.database import get_db
 from models.dataset import Dataset, DatasetRow
 from models.user import User
-from schemas.dataset import DatasetCreate, DatasetOut, DatasetRowOut
+from schemas.dataset import DatasetCreate, DatasetOut, DatasetRowOut, GenerateRowsRequest
+from services.synthetic_service import generate_rows
 
 router = APIRouter(prefix="/datasets", tags=["datasets"])
 
@@ -96,6 +98,30 @@ def create_new_version(dataset_id: UUID, payload: DatasetCreate, db: Session = D
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Dataset not found")
     new_version = Dataset(user_id=current_user.id, name=base.name, version=base.version + 1)
     new_version.rows = [DatasetRow(**row.model_dump()) for row in payload.rows]
+    db.add(new_version)
+    db.commit()
+    db.refresh(new_version)
+    return _to_out(new_version)
+
+
+@router.post("/{dataset_id}/generate", response_model=DatasetOut, status_code=status.HTTP_201_CREATED)
+def generate_dataset_rows(dataset_id: UUID, payload: GenerateRowsRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Generate new rows from the dataset's existing rows as seeds (via an LLM), and
+    append them as a new dataset version. `mode` is 'variation' (realistic paraphrases
+    of the seeds) or 'adversarial' (edge cases / prompt injection / ambiguous input).
+    """
+    base = db.query(Dataset).filter(Dataset.id == dataset_id, Dataset.user_id == current_user.id).first()
+    if not base:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Dataset not found")
+    if not base.rows:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Dataset has no rows to use as seeds")
+
+    generated = generate_rows(model=payload.model or settings.judge_model, mode=payload.mode, seed_rows=base.rows, count=payload.count)
+    if not generated:
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, "Model did not return parseable rows - try again or a different model")
+
+    new_version = Dataset(user_id=current_user.id, name=base.name, version=base.version + 1)
+    new_version.rows = [DatasetRow(input=r["input"], expected_output=r["expected_output"], context=r["context"], tags=r["tags"]) for r in generated]
     db.add(new_version)
     db.commit()
     db.refresh(new_version)

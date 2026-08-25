@@ -4,6 +4,7 @@ from datetime import datetime
 from litellm import completion, completion_cost
 
 from core.database import SessionLocal
+from core.metrics import eval_jobs_total
 from core.redis import publish_progress
 from models.dataset import Dataset
 from models.eval import EvalResult, EvalRun
@@ -87,6 +88,7 @@ def run_eval_job(self, eval_run_id: str):
         eval_run.summary = summarize_run(db, eval_run)
         eval_run.status = "completed" if eval_run.failed_rows < eval_run.total_rows else "failed"
         eval_run.finished_at = datetime.utcnow()
+        eval_jobs_total.labels(status=eval_run.status).inc()
         db.commit()
         publish_progress(
             str(eval_run.id),
