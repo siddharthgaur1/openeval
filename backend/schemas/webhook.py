@@ -7,6 +7,7 @@ from models.webhook import WEBHOOK_EVENTS
 
 
 class WebhookCreate(BaseModel):
+    project_id: UUID | None = None  # omit to use the caller's default project
     url: str
     events: list[str]
     secret: str | None = None
@@ -22,6 +23,7 @@ class WebhookCreate(BaseModel):
 
 class WebhookOut(BaseModel):
     id: UUID
+    project_id: UUID
     url: str
     events: list[str]
     is_active: bool

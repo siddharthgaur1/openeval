@@ -7,23 +7,28 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, status
 from sqlalchemy.orm import Session
 
 from api.deps import get_current_user
+from api.rbac import check_project_role
 from core.config import settings
 from core.database import get_db
 from models.dataset import Dataset, DatasetRow
 from models.user import User
 from schemas.dataset import DatasetCreate, DatasetOut, DatasetRowOut, GenerateRowsRequest
+from services.organization_service import get_default_project
 from services.synthetic_service import generate_rows
 
 router = APIRouter(prefix="/datasets", tags=["datasets"])
 
 
 def _to_out(dataset: Dataset) -> DatasetOut:
-    return DatasetOut(id=dataset.id, name=dataset.name, version=dataset.version, row_count=len(dataset.rows))
+    return DatasetOut(id=dataset.id, project_id=dataset.project_id, name=dataset.name, version=dataset.version, row_count=len(dataset.rows))
 
 
 @router.post("", response_model=DatasetOut, status_code=status.HTTP_201_CREATED)
 def create_dataset(payload: DatasetCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    dataset = Dataset(user_id=current_user.id, name=payload.name)
+    project_id = payload.project_id or get_default_project(db, current_user).id
+    check_project_role(db, current_user.id, project_id, "member")
+
+    dataset = Dataset(user_id=current_user.id, project_id=project_id, name=payload.name)
     dataset.rows = [DatasetRow(**row.model_dump()) for row in payload.rows]
     db.add(dataset)
     db.commit()
@@ -32,7 +37,10 @@ def create_dataset(payload: DatasetCreate, db: Session = Depends(get_db), curren
 
 
 @router.post("/upload", response_model=DatasetOut, status_code=status.HTTP_201_CREATED)
-async def upload_dataset(name: str, file: UploadFile, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def upload_dataset(name: str, file: UploadFile, project_id: UUID | None = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    resolved_project_id = project_id or get_default_project(db, current_user).id
+    check_project_role(db, current_user.id, resolved_project_id, "member")
+
     raw = (await file.read()).decode("utf-8")
     rows: list[DatasetRow] = []
 
@@ -53,7 +61,7 @@ async def upload_dataset(name: str, file: UploadFile, db: Session = Depends(get_
     if not rows:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "No rows parsed from file")
 
-    dataset = Dataset(user_id=current_user.id, name=name, rows=rows)
+    dataset = Dataset(user_id=current_user.id, project_id=resolved_project_id, name=name, rows=rows)
     db.add(dataset)
     db.commit()
     db.refresh(dataset)
@@ -78,25 +86,29 @@ def _row_from_record(record: dict) -> DatasetRow:
 
 
 @router.get("", response_model=list[DatasetOut])
-def list_datasets(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    datasets = db.query(Dataset).filter(Dataset.user_id == current_user.id).all()
+def list_datasets(project_id: UUID, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    check_project_role(db, current_user.id, project_id, "viewer")
+    datasets = db.query(Dataset).filter(Dataset.project_id == project_id).all()
     return [_to_out(d) for d in datasets]
 
 
 @router.get("/{dataset_id}/rows", response_model=list[DatasetRowOut])
 def get_dataset_rows(dataset_id: UUID, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    dataset = db.query(Dataset).filter(Dataset.id == dataset_id, Dataset.user_id == current_user.id).first()
+    dataset = db.query(Dataset).filter(Dataset.id == dataset_id).first()
     if not dataset:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Dataset not found")
+    check_project_role(db, current_user.id, dataset.project_id, "viewer")
     return dataset.rows
 
 
 @router.post("/{dataset_id}/version", response_model=DatasetOut, status_code=status.HTTP_201_CREATED)
 def create_new_version(dataset_id: UUID, payload: DatasetCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    base = db.query(Dataset).filter(Dataset.id == dataset_id, Dataset.user_id == current_user.id).first()
+    base = db.query(Dataset).filter(Dataset.id == dataset_id).first()
     if not base:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Dataset not found")
-    new_version = Dataset(user_id=current_user.id, name=base.name, version=base.version + 1)
+    check_project_role(db, current_user.id, base.project_id, "member")
+
+    new_version = Dataset(user_id=current_user.id, project_id=base.project_id, name=base.name, version=base.version + 1)
     new_version.rows = [DatasetRow(**row.model_dump()) for row in payload.rows]
     db.add(new_version)
     db.commit()
@@ -110,9 +122,10 @@ def generate_dataset_rows(dataset_id: UUID, payload: GenerateRowsRequest, db: Se
     append them as a new dataset version. `mode` is 'variation' (realistic paraphrases
     of the seeds) or 'adversarial' (edge cases / prompt injection / ambiguous input).
     """
-    base = db.query(Dataset).filter(Dataset.id == dataset_id, Dataset.user_id == current_user.id).first()
+    base = db.query(Dataset).filter(Dataset.id == dataset_id).first()
     if not base:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Dataset not found")
+    check_project_role(db, current_user.id, base.project_id, "member")
     if not base.rows:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Dataset has no rows to use as seeds")
 
@@ -120,7 +133,7 @@ def generate_dataset_rows(dataset_id: UUID, payload: GenerateRowsRequest, db: Se
     if not generated:
         raise HTTPException(status.HTTP_502_BAD_GATEWAY, "Model did not return parseable rows - try again or a different model")
 
-    new_version = Dataset(user_id=current_user.id, name=base.name, version=base.version + 1)
+    new_version = Dataset(user_id=current_user.id, project_id=base.project_id, name=base.name, version=base.version + 1)
     new_version.rows = [DatasetRow(input=r["input"], expected_output=r["expected_output"], context=r["context"], tags=r["tags"]) for r in generated]
     db.add(new_version)
     db.commit()

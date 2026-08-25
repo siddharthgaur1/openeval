@@ -49,8 +49,34 @@ def test_dispatch_regression_webhooks_only_fires_for_regressed_runs(mock_deliver
             {"eval_run_id": "candidate", "regressions": ["exact_match"], "delta_vs_baseline": {"exact_match": -0.4}},
         ],
     }
-    dispatch_regression_webhooks(db, "user-1", comparison)
+    run_project_map = {"base": "project-1", "candidate": "project-1"}
+    dispatch_regression_webhooks(db, comparison, run_project_map)
     mock_deliver.delay.assert_called_once()
     args = mock_deliver.delay.call_args[0]
     assert args[0] == "wh-1"
     assert args[1]["eval_run_id"] == "candidate"
+
+
+@patch("workers.webhook_tasks.deliver_webhook")
+def test_dispatch_regression_webhooks_only_fires_for_the_regressed_runs_own_project(mock_deliver):
+    """A compare spanning two projects must not leak project A's regression to
+    project B's webhook, or vice versa."""
+    from services.webhook_service import dispatch_regression_webhooks
+
+    def hooks_for_project(project_id):
+        return {
+            "project-a": [SimpleNamespace(id="wh-a", is_active=True, events=["eval.regression_detected"])],
+            "project-b": [SimpleNamespace(id="wh-b", is_active=True, events=["eval.regression_detected"])],
+        }[project_id]
+
+    db = MagicMock()
+
+    with patch("services.webhook_service.webhooks_for_event", side_effect=lambda db, project_id, event: hooks_for_project(project_id)):
+        comparison = {
+            "baseline_run_id": "base",
+            "runs": [{"eval_run_id": "run-a", "regressions": ["exact_match"]}],
+        }
+        dispatch_regression_webhooks(db, comparison, {"run-a": "project-a"})
+
+    mock_deliver.delay.assert_called_once()
+    assert mock_deliver.delay.call_args[0][0] == "wh-a"

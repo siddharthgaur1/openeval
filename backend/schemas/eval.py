@@ -27,6 +27,7 @@ class EvalResultOut(BaseModel):
 
 class EvalRunOut(BaseModel):
     id: UUID
+    project_id: UUID
     name: str
     dataset_id: UUID
     target_model: str

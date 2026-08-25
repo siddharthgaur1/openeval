@@ -18,12 +18,14 @@ class DatasetRowOut(DatasetRowIn):
 
 
 class DatasetCreate(BaseModel):
+    project_id: UUID | None = None  # omit to use the caller's default project
     name: str
     rows: list[DatasetRowIn] = []
 
 
 class DatasetOut(BaseModel):
     id: UUID
+    project_id: UUID
     name: str
     version: int
     row_count: int

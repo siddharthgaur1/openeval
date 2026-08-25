@@ -96,7 +96,7 @@ def run_eval_job(self, eval_run_id: str):
         )
 
         for event in eval_run_events(eval_run):
-            for webhook in webhooks_for_event(db, eval_run.user_id, event):
+            for webhook in webhooks_for_event(db, eval_run.project_id, event):
                 deliver_webhook.delay(str(webhook.id), build_payload(event, eval_run))
     finally:
         db.close()

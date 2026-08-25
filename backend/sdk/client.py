@@ -16,13 +16,16 @@ from litellm import completion, completion_cost
 
 
 class OpenEvalClient:
-    def __init__(self, api_key: str, base_url: str = "http://localhost:8000", timeout: float = 5.0):
+    def __init__(self, api_key: str, base_url: str = "http://localhost:8000", timeout: float = 5.0, project_id: str | None = None):
         self.api_key = api_key
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
+        # Omit to trace into the caller's default (personal) project server-side.
+        self.project_id = project_id
 
     def _log_trace(self, *, model: str, prompt: str, response: str, latency_ms: float, prompt_tokens: int, completion_tokens: int, cost_usd: float, tags: dict, error: str | None = None) -> None:
         payload = {
+            "project_id": self.project_id,
             "name": "llm-call",
             "model": model,
             "prompt": prompt,

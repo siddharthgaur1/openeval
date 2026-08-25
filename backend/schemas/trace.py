@@ -5,6 +5,9 @@ from pydantic import BaseModel
 
 
 class TraceCreate(BaseModel):
+    # Omit to use the caller's default (personal) project - see
+    # services.organization_service.get_default_project.
+    project_id: UUID | None = None
     name: str = "llm-call"
     model: str
     prompt: str
@@ -17,8 +20,19 @@ class TraceCreate(BaseModel):
     error: str | None = None
 
 
-class TraceOut(TraceCreate):
+class TraceOut(BaseModel):
     id: UUID
+    project_id: UUID
+    name: str
+    model: str
+    prompt: str
+    response: str
+    latency_ms: float
+    prompt_tokens: int
+    completion_tokens: int
+    cost_usd: float
+    tags: dict
+    error: str | None
     created_at: datetime
 
     class Config:

@@ -5,6 +5,7 @@ from pydantic import BaseModel
 
 
 class PromptTemplateCreate(BaseModel):
+    project_id: UUID | None = None  # omit to use the caller's default project
     name: str
     template: str
     variables: list[str] = []
@@ -12,6 +13,7 @@ class PromptTemplateCreate(BaseModel):
 
 class PromptTemplateOut(BaseModel):
     id: UUID
+    project_id: UUID
     name: str
     version: int
     template: str
