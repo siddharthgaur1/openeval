@@ -1,0 +1,35 @@
+# Minimal starting point - not a full production manifest (no HPA, no NetworkPolicy,
+# secrets shown as placeholders). Fill in your registry image and real secrets before applying.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: openeval-backend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: openeval-backend
+  template:
+    metadata:
+      labels:
+        app: openeval-backend
+    spec:
+      containers:
+        - name: backend
+          image: your-registry/openeval-backend:latest
+          ports:
+            - containerPort: 8000
+          envFrom:
+            - secretRef:
+                name: openeval-secrets
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: openeval-backend
+spec:
+  selector:
+    app: openeval-backend
+  ports:
+    - port: 80
+      targetPort: 8000

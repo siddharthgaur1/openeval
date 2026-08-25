@@ -1,0 +1,3 @@
+{"input": "What is the capital of France?", "expected_output": "Paris", "context": "France is a country in Europe. Its capital city is Paris."}
+{"input": "Who wrote Romeo and Juliet?", "expected_output": "William Shakespeare", "context": "Romeo and Juliet is a tragedy written by William Shakespeare."}
+{"input": "What is 2 + 2?", "expected_output": "4", "context": ""}

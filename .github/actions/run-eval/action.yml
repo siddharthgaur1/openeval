@@ -1,0 +1,96 @@
+name: "OpenEval Run"
+description: "Trigger an OpenEval eval run via the REST API, wait for completion, and comment results on the PR"
+inputs:
+  api-url:
+    description: "Base URL of the OpenEval backend"
+    required: true
+  api-key:
+    description: "OpenEval API key (store as a repo secret)"
+    required: true
+  dataset-id:
+    required: true
+  target-model:
+    required: true
+  prompt-template-id:
+    required: false
+    default: ""
+  metrics:
+    description: "Comma-separated metric names"
+    required: false
+    default: "exact_match,f1,answer_relevance,faithfulness,hallucination"
+  poll-interval-seconds:
+    required: false
+    default: "5"
+  timeout-seconds:
+    required: false
+    default: "600"
+runs:
+  using: "composite"
+  steps:
+    - name: Trigger and poll eval run
+      id: eval
+      shell: bash
+      run: |
+        set -euo pipefail
+        METRICS_JSON=$(python3 -c "import json,sys; print(json.dumps(sys.argv[1].split(',')))" "${{ inputs.metrics }}")
+        BODY=$(python3 -c "
+        import json
+        body = {
+            'name': 'ci-eval',
+            'dataset_id': '${{ inputs.dataset-id }}',
+            'target_model': '${{ inputs.target-model }}',
+            'metrics': $METRICS_JSON,
+        }
+        prompt_id = '${{ inputs.prompt-template-id }}'
+        if prompt_id:
+            body['prompt_template_id'] = prompt_id
+        print(json.dumps(body))
+        ")
+        RUN_ID=$(curl -sf -X POST "${{ inputs.api-url }}/api/evals" \
+          -H "Authorization: Bearer ${{ inputs.api-key }}" \
+          -H "Content-Type: application/json" \
+          -d "$BODY" | python3 -c "import json,sys; print(json.load(sys.stdin)['id'])")
+
+        ELAPSED=0
+        while [ "$ELAPSED" -lt "${{ inputs.timeout-seconds }}" ]; do
+          RESULT=$(curl -sf "${{ inputs.api-url }}/api/evals/$RUN_ID" -H "Authorization: Bearer ${{ inputs.api-key }}")
+          STATUS=$(echo "$RESULT" | python3 -c "import json,sys; print(json.load(sys.stdin)['status'])")
+          if [ "$STATUS" = "completed" ] || [ "$STATUS" = "failed" ]; then
+            echo "$RESULT" > eval_result.json
+            echo "status=$STATUS" >> "$GITHUB_OUTPUT"
+            break
+          fi
+          sleep "${{ inputs.poll-interval-seconds }}"
+          ELAPSED=$((ELAPSED + ${{ inputs.poll-interval-seconds }}))
+        done
+
+        if [ ! -f eval_result.json ]; then
+          echo "Eval run timed out" >&2
+          exit 1
+        fi
+
+    - name: Comment results on PR
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          const result = JSON.parse(fs.readFileSync('eval_result.json', 'utf8'));
+          const summary = result.summary || {};
+          const scores = summary.avg_scores || {};
+          const rows = Object.entries(scores).map(([k, v]) => `| ${k} | ${v.toFixed(3)} |`).join('\n');
+          const body = [
+            `### OpenEval results — \`${result.status}\``,
+            '',
+            '| metric | avg score |',
+            '|---|---|',
+            rows || '| (none) | |',
+            '',
+            `p50/p95/p99 latency: ${summary.p50_latency_ms?.toFixed(0)}ms / ${summary.p95_latency_ms?.toFixed(0)}ms / ${summary.p99_latency_ms?.toFixed(0)}ms`,
+            `Total cost: $${(summary.total_cost_usd || 0).toFixed(4)}`,
+          ].join('\n');
+          await github.rest.issues.createComment({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: context.issue.number,
+            body,
+          });
