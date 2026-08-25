@@ -12,6 +12,7 @@ from core.security import (
 )
 from models.user import APIKey, User
 from schemas.auth import APIKeyCreate, APIKeyOut, Token, UserCreate, UserLogin, UserOut
+from services.organization_service import provision_default_workspace
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -22,6 +23,8 @@ def register(payload: UserCreate, db: Session = Depends(get_db)):
         raise HTTPException(status.HTTP_409_CONFLICT, "Email already registered")
     user = User(email=payload.email, hashed_password=hash_password(payload.password))
     db.add(user)
+    db.flush()
+    provision_default_workspace(db, user)
     db.commit()
     db.refresh(user)
     return Token(access_token=create_access_token(str(user.id)))

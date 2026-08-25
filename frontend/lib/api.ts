@@ -23,8 +23,18 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
   return res.json();
 }
 
+export type Project = {
+  id: string;
+  organization_id: string;
+  name: string;
+  trace_quota_per_month: number;
+  eval_run_quota_per_month: number;
+  created_at: string;
+};
+
 export type Trace = {
   id: string;
+  project_id: string;
   name: string;
   model: string;
   prompt: string;
@@ -47,6 +57,7 @@ export type TraceStats = {
 
 export type EvalRun = {
   id: string;
+  project_id: string;
   name: string;
   dataset_id: string;
   target_model: string;
@@ -69,14 +80,33 @@ export type EvalRun = {
   finished_at: string | null;
 };
 
+// Every project-scoped resource requires a project_id - resolved once (the
+// caller's default/personal project, auto-provisioned server-side on register)
+// and cached for the tab's lifetime. A project switcher can call api.myProjects()
+// and override this via setActiveProjectId() when multi-project support is needed.
+let cachedProjectId: string | null = null;
+
+export function setActiveProjectId(projectId: string) {
+  cachedProjectId = projectId;
+}
+
+async function activeProjectId(): Promise<string> {
+  if (cachedProjectId) return cachedProjectId;
+  const project = await apiFetch<Project>("/projects/default");
+  cachedProjectId = project.id;
+  return project.id;
+}
+
 export const api = {
   login: (email: string, password: string) =>
     apiFetch<{ access_token: string }>("/auth/login", { method: "POST", body: JSON.stringify({ email, password }) }),
   register: (email: string, password: string) =>
     apiFetch<{ access_token: string }>("/auth/register", { method: "POST", body: JSON.stringify({ email, password }) }),
-  traces: () => apiFetch<Trace[]>("/traces"),
-  traceStats: () => apiFetch<TraceStats>("/traces/stats"),
-  evalRuns: () => apiFetch<EvalRun[]>("/evals"),
+  myProjects: () => apiFetch<Project[]>("/projects"),
+  defaultProject: () => apiFetch<Project>("/projects/default"),
+  traces: async () => apiFetch<Trace[]>(`/traces?project_id=${await activeProjectId()}`),
+  traceStats: async () => apiFetch<TraceStats>(`/traces/stats?project_id=${await activeProjectId()}`),
+  evalRuns: async () => apiFetch<EvalRun[]>(`/evals?project_id=${await activeProjectId()}`),
   evalRun: (id: string) => apiFetch<EvalRun>(`/evals/${id}`),
   compareRuns: (runIds: string[]) =>
     apiFetch("/evals/compare", { method: "POST", body: JSON.stringify({ run_ids: runIds }) }),

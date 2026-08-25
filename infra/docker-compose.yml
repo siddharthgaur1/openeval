@@ -25,12 +25,27 @@ services:
       timeout: 5s
       retries: 5
 
+  # One-shot init: wipes the shared Prometheus multiprocess dir before backend/
+  # celery-worker start writing to it. A stale per-PID file from a previous run
+  # would double-count or go stale, and doing this wipe inside backend's own
+  # startup command would race celery-worker's startup instead of preceding it.
+  prometheus-multiproc-init:
+    build: ../backend
+    volumes:
+      - prometheus_multiproc:/tmp/prometheus-multiproc
+    command: sh -c "rm -rf /tmp/prometheus-multiproc/* && mkdir -p /tmp/prometheus-multiproc"
+
   backend:
     build: ../backend
     env_file: .env
     environment:
       DATABASE_URL: postgresql://openeval:openeval@postgres:5432/openeval
       REDIS_URL: redis://redis:6379/0
+      # Shared with celery-worker below so /metrics also reports the worker's own
+      # counters (eval_jobs_total) - see core/metrics.py and main.py.
+      PROMETHEUS_MULTIPROC_DIR: /tmp/prometheus-multiproc
+    volumes:
+      - prometheus_multiproc:/tmp/prometheus-multiproc
     ports:
       - "8000:8000"
     depends_on:
@@ -38,6 +53,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      prometheus-multiproc-init:
+        condition: service_completed_successfully
     command: >
       sh -c "alembic upgrade head && uvicorn main:app --host 0.0.0.0 --port 8000"
 
@@ -47,11 +64,16 @@ services:
     environment:
       DATABASE_URL: postgresql://openeval:openeval@postgres:5432/openeval
       REDIS_URL: redis://redis:6379/0
+      PROMETHEUS_MULTIPROC_DIR: /tmp/prometheus-multiproc
+    volumes:
+      - prometheus_multiproc:/tmp/prometheus-multiproc
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
+      prometheus-multiproc-init:
+        condition: service_completed_successfully
     command: celery -A workers.celery_app worker --loglevel=info -Q evals
 
   frontend:
@@ -117,3 +139,4 @@ services:
 
 volumes:
   postgres_data:
+  prometheus_multiproc:

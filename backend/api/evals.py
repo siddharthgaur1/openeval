@@ -7,6 +7,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from api.deps import get_current_user
+from api.rbac import check_project_role
 from core.config import settings
 from core.database import get_db
 from core.redis import progress_channel, redis_client
@@ -23,12 +24,16 @@ router = APIRouter(prefix="/evals", tags=["evals"])
 
 @router.post("", response_model=EvalRunOut, status_code=status.HTTP_201_CREATED)
 def create_eval_run(payload: EvalRunCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    dataset = db.query(Dataset).filter(Dataset.id == payload.dataset_id, Dataset.user_id == current_user.id).first()
+    dataset = db.query(Dataset).filter(Dataset.id == payload.dataset_id).first()
     if not dataset:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Dataset not found")
+    # The eval run always lives in its dataset's project - keeps a run's access
+    # control unambiguous even if the caller belongs to several projects.
+    check_project_role(db, current_user.id, dataset.project_id, "member")
 
     eval_run = EvalRun(
         user_id=current_user.id,
+        project_id=dataset.project_id,
         dataset_id=dataset.id,
         prompt_template_id=payload.prompt_template_id,
         name=payload.name,
@@ -46,10 +51,11 @@ def create_eval_run(payload: EvalRunCreate, db: Session = Depends(get_db), curre
 
 
 @router.get("", response_model=list[EvalRunOut])
-def list_eval_runs(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def list_eval_runs(project_id: UUID, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    check_project_role(db, current_user.id, project_id, "viewer")
     return (
         db.query(EvalRun)
-        .filter(EvalRun.user_id == current_user.id)
+        .filter(EvalRun.project_id == project_id)
         .order_by(EvalRun.created_at.desc())
         .all()
     )
@@ -57,9 +63,10 @@ def list_eval_runs(db: Session = Depends(get_db), current_user: User = Depends(g
 
 @router.get("/{eval_run_id}", response_model=EvalRunDetail)
 def get_eval_run(eval_run_id: UUID, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    eval_run = db.query(EvalRun).filter(EvalRun.id == eval_run_id, EvalRun.user_id == current_user.id).first()
+    eval_run = db.query(EvalRun).filter(EvalRun.id == eval_run_id).first()
     if not eval_run:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Eval run not found")
+    check_project_role(db, current_user.id, eval_run.project_id, "viewer")
     return eval_run
 
 
@@ -69,9 +76,10 @@ async def stream_eval_status(eval_run_id: UUID, db: Session = Depends(get_db), c
     plus a final event when the run finishes. Closes automatically once the run
     reaches a terminal status.
     """
-    eval_run = db.query(EvalRun).filter(EvalRun.id == eval_run_id, EvalRun.user_id == current_user.id).first()
+    eval_run = db.query(EvalRun).filter(EvalRun.id == eval_run_id).first()
     if not eval_run:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Eval run not found")
+    check_project_role(db, current_user.id, eval_run.project_id, "viewer")
 
     async def event_stream():
         yield f"data: {json.dumps({'status': eval_run.status, 'total_rows': eval_run.total_rows, 'completed_rows': eval_run.completed_rows, 'failed_rows': eval_run.failed_rows})}\n\n"
@@ -101,14 +109,13 @@ async def stream_eval_status(eval_run_id: UUID, db: Session = Depends(get_db), c
 
 @router.post("/compare")
 def compare_eval_runs(payload: CompareRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    runs = (
-        db.query(EvalRun)
-        .filter(EvalRun.id.in_(payload.run_ids), EvalRun.user_id == current_user.id)
-        .all()
-    )
+    runs = db.query(EvalRun).filter(EvalRun.id.in_(payload.run_ids)).all()
     if len(runs) != len(payload.run_ids):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "One or more eval runs not found")
+    for run in runs:
+        check_project_role(db, current_user.id, run.project_id, "viewer")
 
     comparison = compare_runs(db, payload.run_ids, payload.regression_threshold)
-    dispatch_regression_webhooks(db, current_user.id, comparison)
+    run_project_map = {str(run.id): run.project_id for run in runs}
+    dispatch_regression_webhooks(db, comparison, run_project_map)
     return comparison

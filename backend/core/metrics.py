@@ -1,10 +1,10 @@
 from prometheus_client import Counter
 
-# ponytail: single-process prometheus_client registry. traces_ingested_total /
-# llm_cost_usd_total (incremented in the FastAPI process) show up at GET /metrics
-# correctly; eval_jobs_total (incremented in the Celery worker process) does NOT,
-# since it's a separate process with its own registry. Fix: set PROMETHEUS_MULTIPROC_DIR
-# and use prometheus_client's multiprocess mode if worker-side metrics are needed.
+# When PROMETHEUS_MULTIPROC_DIR is set, prometheus_client transparently switches
+# these Counters to write into per-process mmap files in that directory instead of
+# an in-memory registry - this is what lets the FastAPI process's /metrics endpoint
+# (see main.py) also report counters incremented by the separate Celery worker
+# process, as long as both processes share that directory (see infra/docker-compose.yml).
 traces_ingested_total = Counter("openeval_traces_ingested_total", "Total traces ingested")
 eval_jobs_total = Counter("openeval_eval_jobs_total", "Total eval jobs by terminal status", ["status"])
 llm_cost_usd_total = Counter("openeval_llm_cost_usd_total", "Total LLM cost in USD", ["provider", "model"])

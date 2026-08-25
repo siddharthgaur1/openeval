@@ -13,6 +13,8 @@ from litellm.integrations.custom_logger import CustomLogger
 
 OPENEVAL_API_URL = os.environ.get("OPENEVAL_API_URL", "http://backend:8000")
 OPENEVAL_API_KEY = os.environ.get("OPENEVAL_API_KEY", "")
+# Optional - omit to trace into the API key owner's default project server-side.
+OPENEVAL_PROJECT_ID = os.environ.get("OPENEVAL_PROJECT_ID") or None
 
 
 class OpenEvalLogger(CustomLogger):
@@ -28,6 +30,7 @@ class OpenEvalLogger(CustomLogger):
             output_text = response_obj.choices[0].message.content or ""
 
         payload = {
+            "project_id": OPENEVAL_PROJECT_ID,
             "name": "litellm-proxy-call",
             "model": kwargs.get("model", "unknown"),
             "prompt": prompt,

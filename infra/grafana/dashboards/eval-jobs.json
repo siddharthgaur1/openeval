@@ -9,8 +9,7 @@
       "title": "Eval jobs by terminal status",
       "type": "timeseries",
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
-      "targets": [{ "expr": "sum(rate(openeval_eval_jobs_total[1h])) by (status)" }],
-      "note": "Only visible when the Celery worker exposes /metrics too - see core/metrics.py ponytail note on multiprocess mode."
+      "targets": [{ "expr": "sum(rate(openeval_eval_jobs_total[1h])) by (status)" }]
     },
     {
       "id": 2,
