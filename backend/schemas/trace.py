@@ -39,6 +39,16 @@ class TraceOut(BaseModel):
         from_attributes = True
 
 
+class FeedbackRequest(BaseModel):
+    score: int  # thumbs down/up as -1/1, or a 1-5 scale - caller's choice
+    comment: str | None = None
+
+
+class TraceExportRequest(BaseModel):
+    trace_ids: list[UUID]
+    dataset_name: str = "traces-export"
+
+
 class TraceStats(BaseModel):
     count: int
     total_cost_usd: float

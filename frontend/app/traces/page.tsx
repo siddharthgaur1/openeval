@@ -1,11 +1,27 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
-import { api } from "@/lib/api";
+import { useMemo, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { api, Trace } from "@/lib/api";
 
 export default function TracesPage() {
   const { data: traces, isLoading, error } = useQuery({ queryKey: ["traces"], queryFn: api.traces });
   const { data: stats } = useQuery({ queryKey: ["trace-stats"], queryFn: api.traceStats });
+  const [search, setSearch] = useState("");
+  const [modelFilter, setModelFilter] = useState("");
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  const models = useMemo(() => [...new Set((traces ?? []).map((t) => t.model))], [traces]);
+
+  const filtered = useMemo(() => {
+    return (traces ?? []).filter((t) => {
+      if (modelFilter && t.model !== modelFilter) return false;
+      if (t.error) return true;
+      if (!search) return true;
+      const haystack = `${t.prompt} ${t.response}`.toLowerCase();
+      return haystack.includes(search.toLowerCase());
+    });
+  }, [traces, search, modelFilter]);
 
   if (isLoading) return <p>Loading traces...</p>;
   if (error) return <p className="text-red-400">Failed to load traces: {(error as Error).message}</p>;
@@ -24,6 +40,23 @@ export default function TracesPage() {
         </div>
       )}
 
+      <div className="flex gap-3">
+        <input
+          placeholder="Search prompt/response..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="flex-1 rounded border border-slate-800 bg-slate-900 px-3 py-2 text-sm"
+        />
+        <select value={modelFilter} onChange={(e) => setModelFilter(e.target.value)} className="rounded border border-slate-800 bg-slate-900 px-3 py-2 text-sm">
+          <option value="">All models</option>
+          {models.map((m) => (
+            <option key={m} value={m}>
+              {m}
+            </option>
+          ))}
+        </select>
+      </div>
+
       <table className="w-full text-sm">
         <thead>
           <tr className="text-left text-slate-400 border-b border-slate-800">
@@ -31,22 +64,74 @@ export default function TracesPage() {
             <th>Latency</th>
             <th>Tokens</th>
             <th>Cost</th>
+            <th>Feedback</th>
             <th>Created</th>
           </tr>
         </thead>
         <tbody>
-          {traces?.map((t) => (
-            <tr key={t.id} className="border-b border-slate-900">
-              <td className="py-2">{t.model}</td>
-              <td>{t.latency_ms.toFixed(0)}ms</td>
-              <td>{t.prompt_tokens + t.completion_tokens}</td>
-              <td>${t.cost_usd.toFixed(4)}</td>
-              <td>{new Date(t.created_at).toLocaleString()}</td>
-            </tr>
+          {filtered.map((t) => (
+            <TraceRow key={t.id} trace={t} expanded={expandedId === t.id} onToggle={() => setExpandedId(expandedId === t.id ? null : t.id)} />
           ))}
         </tbody>
       </table>
     </div>
+  );
+}
+
+function TraceRow({ trace, expanded, onToggle }: { trace: Trace; expanded: boolean; onToggle: () => void }) {
+  const queryClient = useQueryClient();
+  const [comment, setComment] = useState("");
+
+  const feedback = useMutation({
+    mutationFn: (score: number) => api.submitFeedback(trace.id, score, comment || undefined),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["traces"] }),
+  });
+
+  const existingFeedback = trace.tags?.feedback;
+
+  return (
+    <>
+      <tr className={`border-b border-slate-900 cursor-pointer ${trace.error ? "text-red-400" : ""}`} onClick={onToggle}>
+        <td className="py-2">{trace.model}</td>
+        <td>{trace.latency_ms.toFixed(0)}ms</td>
+        <td>{trace.prompt_tokens + trace.completion_tokens}</td>
+        <td>${trace.cost_usd.toFixed(4)}</td>
+        <td>{existingFeedback ? (existingFeedback.score > 0 ? "👍" : "👎") : "-"}</td>
+        <td>{new Date(trace.created_at).toLocaleString()}</td>
+      </tr>
+      {expanded && (
+        <tr className="border-b border-slate-900 bg-slate-900/40">
+          <td colSpan={6} className="p-4 space-y-3">
+            {trace.error && <p className="text-red-400 font-mono text-xs whitespace-pre-wrap">{trace.error}</p>}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <div className="text-xs text-slate-400 mb-1">Prompt</div>
+                <pre className="whitespace-pre-wrap rounded bg-slate-950 p-2 text-xs">{trace.prompt}</pre>
+              </div>
+              <div>
+                <div className="text-xs text-slate-400 mb-1">Response</div>
+                <pre className="whitespace-pre-wrap rounded bg-slate-950 p-2 text-xs">{trace.response}</pre>
+              </div>
+            </div>
+            <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+              <button onClick={() => feedback.mutate(1)} className="rounded bg-slate-800 hover:bg-slate-700 px-3 py-1 text-sm">
+                👍
+              </button>
+              <button onClick={() => feedback.mutate(-1)} className="rounded bg-slate-800 hover:bg-slate-700 px-3 py-1 text-sm">
+                👎
+              </button>
+              <input
+                placeholder="Comment (optional)"
+                value={comment}
+                onChange={(e) => setComment(e.target.value)}
+                className="flex-1 rounded border border-slate-800 bg-slate-900 px-3 py-1 text-sm"
+              />
+              {existingFeedback && <span className="text-xs text-slate-500">Last: {existingFeedback.comment ?? "no comment"}</span>}
+            </div>
+          </td>
+        </tr>
+      )}
+    </>
   );
 }
 
