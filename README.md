@@ -171,6 +171,18 @@ Requires `OPENEVAL_API_KEY` (and your real provider key) set in `infra/.env`; se
 - **More metrics**: `semantic_similarity` (local sentence-transformers embeddings, no API
   calls), `json_validity`, `regex_match`, `bleu`, `rouge_l` — all deterministic/local, on top
   of the original 5.
+- **Synthetic dataset generation**: `POST /api/datasets/{id}/generate` uses the dataset's own
+  rows as seeds and an LLM to produce `variation` (realistic paraphrases) or `adversarial`
+  (edge cases / prompt injection) rows as a new dataset version.
+- **LangChain / LangGraph / OpenAI client integrations**: see "LangChain / LangGraph / raw
+  OpenAI client integrations" above.
+- **Zero-code tracing via LiteLLM proxy**: see "Zero-code tracing" above.
+- **Self-monitoring**: backend exposes `GET /metrics` (Prometheus format) via
+  `prometheus-fastapi-instrumentator` — request latency/count by route, plus custom counters
+  in `core/metrics.py` (`openeval_traces_ingested_total`, `openeval_llm_cost_usd_total`,
+  `openeval_eval_jobs_total`). `docker compose --profile monitoring up` brings up Prometheus +
+  Grafana (pre-provisioned dashboards in `infra/grafana/dashboards/`) + Flower (Celery task
+  monitoring UI at :5555).
 
 ## CI/CD integration
 
@@ -193,13 +205,21 @@ See top of this repo for `backend/` (FastAPI + Celery + SDK), `frontend/` (Next.
 
 ## What's scaffolded vs. stubbed
 
-Built and working: ingestion (SDK + minimal OTLP/HTTP JSON endpoint), dataset upload/versioning,
-eval engine (5 built-in metrics + custom-metric hook), prompt versioning, run comparison with
-regression detection, JWT + API key auth, traces/eval dashboards.
+Built and working: ingestion (SDK + LangChain/LangGraph + OpenAI-client-patch + LiteLLM-proxy
+zero-code tracing + minimal OTLP/HTTP JSON endpoint), dataset upload/versioning/synthetic
+generation, eval engine (10 built-in metrics + custom-metric hook), prompt versioning +
+playground + promotion, experiments with significance testing, webhooks, cost/latency
+analytics, human annotation queue with Cohen's kappa, organizations/projects/RBAC, Redis rate
+limiting, SSE eval progress, Prometheus self-monitoring + Grafana dashboards, JWT + API key
+auth, traces/eval dashboards.
 
-Stubbed as a starting point only (not production-hardened): `infra/k8s/*.yaml` (no HPA/secrets
-management), `infra/prometheus/prometheus.yml` (backend doesn't expose `/metrics` yet — add
-`prometheus-fastapi-instrumentator` when needed), Grafana dashboards (not included).
+Stubbed as a starting point only (not production-hardened): `infra/k8s/*.yaml` (no
+secrets management beyond a placeholder `secretRef`; the worker HPA needs KEDA installed
+in-cluster — see the comment in `infra/k8s/worker/hpa.yaml`), multi-tenancy resource scoping
+(orgs/projects/RBAC exist and are enforced via `require_role`, but traces/datasets/evals still
+belong directly to a user rather than a project — wiring every resource to a project is a
+follow-up), the Celery worker's own Prometheus metrics (see the ponytail note in
+`core/metrics.py` — needs `PROMETHEUS_MULTIPROC_DIR` multiprocess mode).
 
 ## Testing
 

@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from api.deps import get_current_user
 from core.database import get_db
+from core.metrics import record_llm_cost, traces_ingested_total
 from models.trace import Trace
 from models.user import User
 from schemas.trace import TraceCreate, TraceOut, TraceStats
@@ -19,6 +20,8 @@ def create_trace(payload: TraceCreate, db: Session = Depends(get_db), current_us
     db.add(trace)
     db.commit()
     db.refresh(trace)
+    traces_ingested_total.inc()
+    record_llm_cost(trace.model, trace.cost_usd)
     return trace
 
 

@@ -1,0 +1,23 @@
+# Minimal starting point - not a full production manifest. Fill in your registry
+# image and real secrets before applying.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: openeval-worker
+spec:
+  replicas: 1  # overridden at runtime by the HPA below
+  selector:
+    matchLabels:
+      app: openeval-worker
+  template:
+    metadata:
+      labels:
+        app: openeval-worker
+    spec:
+      containers:
+        - name: worker
+          image: your-registry/openeval-backend:latest
+          command: ["celery", "-A", "workers.celery_app", "worker", "--loglevel=info", "-Q", "evals"]
+          envFrom:
+            - secretRef:
+                name: openeval-secrets

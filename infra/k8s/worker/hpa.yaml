@@ -1,0 +1,21 @@
+# Scales openeval-worker on Celery queue depth (the Redis "evals" list length), not
+# CPU/memory - a queue-depth signal isn't available to vanilla Kubernetes HPA, so this
+# uses KEDA (https://keda.sh) as the metrics source. Requires KEDA installed in-cluster;
+# without it this ScaledObject has no effect (the Deployment above just runs at its
+# static `replicas: 1`).
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: openeval-worker-scaler
+spec:
+  scaleTargetRef:
+    name: openeval-worker
+  minReplicaCount: 1
+  maxReplicaCount: 10
+  cooldownPeriod: 60
+  triggers:
+    - type: redis
+      metadata:
+        address: redis:6379
+        listName: evals
+        listLength: "5"  # target: ~5 queued jobs per worker replica

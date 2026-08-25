@@ -1,0 +1,36 @@
+{
+  "title": "OpenEval - Platform Health",
+  "uid": "openeval-platform",
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "panels": [
+    {
+      "id": 1,
+      "title": "API request rate",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "targets": [{ "expr": "sum(rate(openeval_api_request_duration_seconds_count[5m])) by (handler)" }]
+    },
+    {
+      "id": 2,
+      "title": "API p95 latency",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "targets": [{ "expr": "histogram_quantile(0.95, sum(rate(openeval_api_request_duration_seconds_bucket[5m])) by (le, handler))" }]
+    },
+    {
+      "id": 3,
+      "title": "API error rate (5xx)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "targets": [{ "expr": "sum(rate(openeval_api_request_duration_seconds_count{status=~\"5..\"}[5m]))" }]
+    },
+    {
+      "id": 4,
+      "title": "Traces ingested (total)",
+      "type": "stat",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "targets": [{ "expr": "openeval_traces_ingested_total" }]
+    }
+  ]
+}
