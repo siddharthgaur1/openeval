@@ -1,0 +1,16 @@
+name: Eval on PR
+
+on:
+  pull_request:
+
+jobs:
+  eval:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/run-eval
+        with:
+          api-url: ${{ vars.OPENEVAL_API_URL }}
+          api-key: ${{ secrets.OPENEVAL_API_KEY }}
+          dataset-id: ${{ vars.OPENEVAL_DATASET_ID }}
+          target-model: ${{ vars.OPENEVAL_TARGET_MODEL }}

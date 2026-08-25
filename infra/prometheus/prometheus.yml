@@ -1,0 +1,9 @@
+# Minimal scrape config. FastAPI must expose /metrics (e.g. via prometheus-fastapi-instrumentator)
+# for the backend job below to return data - not wired up yet in the MVP.
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: openeval-backend
+    static_configs:
+      - targets: ["backend:8000"]
