@@ -13,3 +13,7 @@ build/
 .coverage
 htmlcov/
 .DS_Store
+
+# Next.js build artifacts
+*.tsbuildinfo
+next-env.d.ts
