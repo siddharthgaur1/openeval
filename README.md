@@ -101,6 +101,46 @@ Compare two runs and detect regressions:
 curl -X POST localhost:8000/api/evals/compare -H "Authorization: Bearer oe_..." -d '{"run_ids": ["<baseline>", "<candidate>"]}'
 ```
 
+## LangChain / LangGraph / raw OpenAI client integrations
+
+```python
+# LangChain and LangGraph (LangGraph runs on LangChain's callback system, so this
+# covers both - pass the handler as a callback anywhere a chain/graph accepts one)
+from sdk.client import OpenEvalClient
+from sdk.integrations.langchain import OpenEvalCallbackHandler
+
+handler = OpenEvalCallbackHandler(OpenEvalClient(api_key="oe_..."), tags={"env": "prod"})
+llm.invoke("hello", config={"callbacks": [handler]})
+```
+
+```python
+# Already have an openai.OpenAI() client and don't want to change call sites:
+from sdk.integrations.openai import patch_openai_client
+patch_openai_client(my_openai_client, OpenEvalClient(api_key="oe_..."))
+```
+
+`pip install openeval-sdk[langchain]` or `[openai]` for the optional extras.
+
+## Zero-code tracing (LiteLLM proxy)
+
+Don't want to touch app code at all? Point any OpenAI-compatible client at the bundled
+LiteLLM proxy instead of the real provider, and every call is traced automatically:
+
+```bash
+cd infra
+docker compose --profile proxy up -d litellm-proxy   # off by default, opt-in via --profile
+```
+
+```python
+import openai
+client = openai.OpenAI(base_url="http://localhost:4000/v1", api_key="anything")
+client.chat.completions.create(model="gpt-4o-mini", messages=[{"role": "user", "content": "hi"}])
+# ^ traced to OpenEval with zero code changes beyond the base_url
+```
+
+Requires `OPENEVAL_API_KEY` (and your real provider key) set in `infra/.env`; see
+`infra/litellm-proxy/`.
+
 ## More: experiments, webhooks, analytics, playground
 
 - **Experiments**: `POST /api/experiments` groups eval runs with a pinned baseline; `GET
@@ -121,6 +161,13 @@ curl -X POST localhost:8000/api/evals/compare -H "Authorization: Bearer oe_..." 
   previous production version to `staging`.
 - **Rate limiting**: every authenticated request is checked against a Redis sliding-window
   limit (`rate_limit_per_minute` in `.env`, default 120/min per user).
+- **Organizations/Projects/RBAC**: `POST /api/organizations` (creator becomes `owner`),
+  invite members with a role (`owner`/`admin`/`member`/`viewer`), create projects under an
+  org. `api/rbac.py:require_role(...)` is a reusable dependency for project-scoped routes.
+- **Human annotation**: `POST /api/annotations/assign` queues a trace for a reviewer,
+  `POST /api/annotations/queue/{id}/submit` records their scores, `POST /api/annotations/kappa`
+  computes Cohen's kappa between two annotators on a criterion, `POST /api/annotations/export`
+  turns annotations into a new dataset.
 - **More metrics**: `semantic_similarity` (local sentence-transformers embeddings, no API
   calls), `json_validity`, `regex_match`, `bleu`, `rouge_l` — all deterministic/local, on top
   of the original 5.

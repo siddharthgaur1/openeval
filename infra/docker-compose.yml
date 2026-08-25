@@ -63,5 +63,20 @@ services:
     depends_on:
       - backend
 
+  # Optional: zero-code tracing. Point any OpenAI-compatible client's base_url at
+  # this proxy instead of the real provider and every call is auto-traced to
+  # OpenEval - no SDK needed. Off by default; `docker compose --profile proxy up`
+  # to include it. Requires OPENEVAL_API_KEY (and your provider keys) in .env.
+  litellm-proxy:
+    build: ./litellm-proxy
+    profiles: ["proxy"]
+    env_file: .env
+    environment:
+      OPENEVAL_API_URL: http://backend:8000
+    ports:
+      - "4000:4000"
+    depends_on:
+      - backend
+
 volumes:
   postgres_data:

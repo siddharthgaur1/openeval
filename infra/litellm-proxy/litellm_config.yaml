@@ -1,0 +1,13 @@
+# LiteLLM proxy config. Point your OpenAI-compatible client's base_url at this proxy
+# (e.g. http://localhost:4000/v1) and every call is auto-traced to OpenEval with zero
+# code changes - no OpenEval SDK needed.
+model_list:
+  - model_name: "*"
+    litellm_params:
+      model: "*"  # pass through whatever model name the client requests
+
+litellm_settings:
+  callbacks: ["callback.openeval_handler"]
+
+# Provider API keys and OPENEVAL_API_URL / OPENEVAL_API_KEY are read from the
+# environment - set them in infra/.env, never hardcode them here.
