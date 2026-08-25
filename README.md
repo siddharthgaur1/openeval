@@ -209,17 +209,29 @@ Built and working: ingestion (SDK + LangChain/LangGraph + OpenAI-client-patch + 
 zero-code tracing + minimal OTLP/HTTP JSON endpoint), dataset upload/versioning/synthetic
 generation, eval engine (10 built-in metrics + custom-metric hook), prompt versioning +
 playground + promotion, experiments with significance testing, webhooks, cost/latency
-analytics, human annotation queue with Cohen's kappa, organizations/projects/RBAC, Redis rate
-limiting, SSE eval progress, Prometheus self-monitoring + Grafana dashboards, JWT + API key
-auth, traces/eval dashboards.
+analytics, human annotation queue with Cohen's kappa, organizations/projects/RBAC (every
+resource — traces, datasets, prompts, eval runs, experiments, annotations — is scoped to a
+project and every route checks the caller's role via `require_role`/`check_project_role`),
+Redis rate limiting, SSE eval progress, Prometheus self-monitoring + Grafana dashboards, JWT +
+API key auth, trace feedback (thumbs up/down + comment) and bulk trace-to-dataset export.
+
+Frontend (Next.js, `frontend/app/`): login/register, an overview dashboard (traces
+today/week, error rate, cost trend, top models, recent runs), a searchable/filterable trace
+explorer with inline feedback, dataset management (create/upload/synthetic generation/row
+viewer), prompt management (versioning, promote-to-production, playground, unified diff
+between versions), eval run creation + live SSE progress, experiment comparison (metric
+deltas, significance markers, per-row regressions), an annotation queue + Cohen's kappa
+calculator, and cost/latency analytics charts.
 
 Stubbed as a starting point only (not production-hardened): `infra/k8s/*.yaml` (no
 secrets management beyond a placeholder `secretRef`; the worker HPA needs KEDA installed
-in-cluster — see the comment in `infra/k8s/worker/hpa.yaml`), multi-tenancy resource scoping
-(orgs/projects/RBAC exist and are enforced via `require_role`, but traces/datasets/evals still
-belong directly to a user rather than a project — wiring every resource to a project is a
-follow-up), the Celery worker's own Prometheus metrics (see the ponytail note in
-`core/metrics.py` — needs `PROMETHEUS_MULTIPROC_DIR` multiprocess mode).
+in-cluster — see the comment in `infra/k8s/worker/hpa.yaml`), the Celery worker's own
+Prometheus metrics (see the ponytail note in `core/metrics.py` — needs
+`PROMETHEUS_MULTIPROC_DIR` multiprocess mode), assigning annotations/computing kappa from the
+UI takes raw user IDs (there's no user-directory endpoint yet to pick a teammate from a list),
+and the prompt diff viewer/synthetic-data UI use small dependency-free implementations
+(a line-diff and manual JSON forms) rather than Monaco/react-diff-viewer from the original
+spec — swap in later if richer editing is worth the added JS payload.
 
 ## Testing
 
