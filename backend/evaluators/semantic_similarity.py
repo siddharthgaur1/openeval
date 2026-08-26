@@ -32,4 +32,6 @@ class SemanticSimilarityEvaluator(Evaluator):
         model = _get_model()
         emb_output, emb_expected = model.encode([output, expected_output])
         similarity = _cosine(emb_output, emb_expected)
-        return max(0.0, min(1.0, (similarity + 1) / 2))
+        # model.encode() returns numpy arrays, so _cosine's result is numpy.float32 -
+        # not JSON-serializable when eval_service persists scores to the DB.
+        return float(max(0.0, min(1.0, (similarity + 1) / 2)))
