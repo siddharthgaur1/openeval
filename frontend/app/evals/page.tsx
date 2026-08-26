@@ -12,7 +12,17 @@ const STATUS_COLOR: Record<string, string> = {
   failed: "text-red-400",
 };
 
-const AVAILABLE_METRICS = ["exact_match", "f1", "answer_relevance", "faithfulness", "hallucination"];
+const AVAILABLE_METRICS = [
+  "exact_match",
+  "f1",
+  "answer_relevance",
+  "faithfulness",
+  "hallucination",
+  "context_precision",
+  "context_recall",
+  "context_entity_recall",
+  "noise_robustness",
+];
 
 export default function EvalsPage() {
   const queryClient = useQueryClient();

@@ -2,6 +2,7 @@ from evaluators.deterministic_extra import BleuEvaluator, JsonValidityEvaluator,
 from evaluators.exact_match import ExactMatchEvaluator, F1Evaluator
 from evaluators.faithfulness import FaithfulnessEvaluator
 from evaluators.hallucination import HallucinationEvaluator
+from evaluators.rag_context import ContextEntityRecallEvaluator, ContextPrecisionEvaluator, ContextRecallEvaluator, NoiseRobustnessEvaluator
 from evaluators.relevance import AnswerRelevanceEvaluator
 from evaluators.semantic_similarity import SemanticSimilarityEvaluator
 
@@ -18,6 +19,10 @@ REGISTRY = {
         RegexMatchEvaluator(),
         BleuEvaluator(),
         RougeLEvaluator(),
+        ContextPrecisionEvaluator(),
+        ContextRecallEvaluator(),
+        ContextEntityRecallEvaluator(),
+        NoiseRobustnessEvaluator(),
     ]
 }
 
