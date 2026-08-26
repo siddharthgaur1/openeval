@@ -1,3 +1,4 @@
+from evaluators.deepeval_judge import CoherenceEvaluator, ConcisenessEvaluator, ToxicityEvaluator
 from evaluators.deterministic_extra import BleuEvaluator, JsonValidityEvaluator, RegexMatchEvaluator, RougeLEvaluator
 from evaluators.exact_match import ExactMatchEvaluator, F1Evaluator
 from evaluators.faithfulness import FaithfulnessEvaluator
@@ -23,6 +24,9 @@ REGISTRY = {
         ContextRecallEvaluator(),
         ContextEntityRecallEvaluator(),
         NoiseRobustnessEvaluator(),
+        ToxicityEvaluator(),
+        CoherenceEvaluator(),
+        ConcisenessEvaluator(),
     ]
 }
 

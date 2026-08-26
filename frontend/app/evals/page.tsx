@@ -22,6 +22,9 @@ const AVAILABLE_METRICS = [
   "context_recall",
   "context_entity_recall",
   "noise_robustness",
+  "toxicity",
+  "coherence",
+  "conciseness",
 ];
 
 export default function EvalsPage() {
