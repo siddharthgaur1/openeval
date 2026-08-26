@@ -7,7 +7,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from api.deps import get_current_user
-from api.rbac import check_project_role
+from api.rbac import check_project_role, check_quota
 from core.config import settings
 from core.database import get_db
 from core.redis import progress_channel, redis_client
@@ -29,7 +29,8 @@ def create_eval_run(payload: EvalRunCreate, db: Session = Depends(get_db), curre
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Dataset not found")
     # The eval run always lives in its dataset's project - keeps a run's access
     # control unambiguous even if the caller belongs to several projects.
-    check_project_role(db, current_user.id, dataset.project_id, "member")
+    project = check_project_role(db, current_user.id, dataset.project_id, "member")
+    check_quota(db, project, "eval_run")
 
     eval_run = EvalRun(
         user_id=current_user.id,

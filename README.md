@@ -164,6 +164,10 @@ Requires `OPENEVAL_API_KEY` (and your real provider key) set in `infra/.env`; se
 - **Organizations/Projects/RBAC**: `POST /api/organizations` (creator becomes `owner`),
   invite members with a role (`owner`/`admin`/`member`/`viewer`), create projects under an
   org. `api/rbac.py:require_role(...)` is a reusable dependency for project-scoped routes.
+  Each project also has a monthly trace/eval-run quota (`trace_quota_per_month` /
+  `eval_run_quota_per_month`, defaults 1M / 1K); `api/rbac.py:check_quota(...)` counts rows
+  created since the 1st of the current UTC month and returns 429 once a project hits its
+  limit — enforced on trace ingestion and eval-run creation.
 - **Human annotation**: `POST /api/annotations/assign` queues a trace for a reviewer,
   `POST /api/annotations/queue/{id}/submit` records their scores, `POST /api/annotations/kappa`
   computes Cohen's kappa between two annotators on a criterion, `POST /api/annotations/export`

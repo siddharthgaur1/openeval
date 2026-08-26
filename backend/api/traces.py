@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from api.deps import get_current_user
-from api.rbac import check_project_role
+from api.rbac import check_project_role, check_quota
 from core.database import get_db
 from core.metrics import record_llm_cost, traces_ingested_total
 from models.dataset import Dataset, DatasetRow
@@ -21,7 +21,8 @@ router = APIRouter(prefix="/traces", tags=["traces"])
 @router.post("", response_model=TraceOut, status_code=status.HTTP_201_CREATED)
 def create_trace(payload: TraceCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     project_id = payload.project_id or get_default_project(db, current_user).id
-    check_project_role(db, current_user.id, project_id, "member")
+    project = check_project_role(db, current_user.id, project_id, "member")
+    check_quota(db, project, "trace")
 
     fields = payload.model_dump(exclude={"project_id"})
     trace = Trace(user_id=current_user.id, project_id=project_id, **fields)

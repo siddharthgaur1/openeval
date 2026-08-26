@@ -1,3 +1,4 @@
+from datetime import datetime
 from uuid import UUID
 
 from fastapi import Depends, HTTPException, status
@@ -5,9 +6,13 @@ from sqlalchemy.orm import Session
 
 from api.deps import get_current_user
 from core.database import get_db
+from models.eval import EvalRun
 from models.organization import ROLE_RANK, Membership
 from models.project import Project
+from models.trace import Trace
 from models.user import User
+
+_QUOTA_MODELS = {"trace": (Trace, "trace_quota_per_month"), "eval_run": (EvalRun, "eval_run_quota_per_month")}
 
 
 def get_membership(db: Session, user_id, organization_id) -> Membership | None:
@@ -33,6 +38,19 @@ def check_project_role(db: Session, user_id, project_id, min_role: str) -> Proje
         raise HTTPException(status.HTTP_403_FORBIDDEN, f"Requires role '{min_role}' or higher, you have '{membership.role}'")
 
     return project
+
+
+def check_quota(db: Session, project: Project, kind: str) -> None:
+    """Enforce the project's monthly trace/eval-run quota (`kind` is 'trace' or
+    'eval_run'). Raises 429 once the count of rows created since the 1st of the
+    current UTC month reaches the project's configured limit.
+    """
+    model, quota_field = _QUOTA_MODELS[kind]
+    month_start = datetime.utcnow().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    limit = getattr(project, quota_field)
+    count = db.query(model).filter(model.project_id == project.id, model.created_at >= month_start).count()
+    if count >= limit:
+        raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, f"Monthly {kind} quota ({limit}) exceeded for this project")
 
 
 def require_role(min_role: str):

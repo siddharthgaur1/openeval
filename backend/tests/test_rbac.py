@@ -4,7 +4,7 @@ import pytest
 from fastapi import HTTPException
 from unittest.mock import MagicMock
 
-from api.rbac import require_role
+from api.rbac import check_quota, require_role
 from models.organization import ROLE_RANK, ROLES
 
 
@@ -59,3 +59,19 @@ def test_require_role_allows_sufficient_role():
 
     result = dependency(project_id=uuid4(), db=db, current_user=MagicMock())
     assert result is project
+
+
+def test_check_quota_allows_under_limit():
+    db = MagicMock()
+    project = MagicMock(id=uuid4(), trace_quota_per_month=100)
+    db.query.return_value.filter.return_value.count.return_value = 99
+    check_quota(db, project, "trace")  # should not raise
+
+
+def test_check_quota_rejects_at_limit():
+    db = MagicMock()
+    project = MagicMock(id=uuid4(), eval_run_quota_per_month=10)
+    db.query.return_value.filter.return_value.count.return_value = 10
+    with pytest.raises(HTTPException) as exc_info:
+        check_quota(db, project, "eval_run")
+    assert exc_info.value.status_code == 429
