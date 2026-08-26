@@ -81,7 +81,9 @@ visible immediately in the Traces dashboard.
 
 ## Running an eval
 
-1. Upload a dataset (CSV or JSONL with `input` / `expected_output` / `context` columns — see `evals/sample_qa.jsonl`):
+1. Upload a dataset (CSV or JSONL with `input` / `expected_output` / `context` columns — see
+   `evals/sample_qa.jsonl`). For RAG metrics, `context` can hold multiple retrieved chunks by
+   separating them with a `\n---\n` line; otherwise the whole field is treated as one chunk.
    ```bash
    curl -X POST "localhost:8000/api/datasets/upload?name=sample-qa" \
      -H "Authorization: Bearer oe_..." -F "file=@evals/sample_qa.jsonl"
@@ -175,6 +177,22 @@ Requires `OPENEVAL_API_KEY` (and your real provider key) set in `infra/.env`; se
 - **More metrics**: `semantic_similarity` (local sentence-transformers embeddings, no API
   calls), `json_validity`, `regex_match`, `bleu`, `rouge_l` — all deterministic/local, on top
   of the original 5.
+- **RAGAS/DeepEval-backed metrics**: `faithfulness`, `answer_relevance`, and `hallucination`
+  are now backed by real `deepeval` metric implementations (`FaithfulnessMetric`,
+  `AnswerRelevancyMetric`, `HallucinationMetric`) instead of hand-rolled prompts, plus four
+  new metrics: `context_precision` / `context_recall` (DeepEval's `ContextualPrecisionMetric`
+  / `ContextualRecallMetric` — the same algorithms RAGAS implements), and
+  `context_entity_recall` / `noise_robustness` (RAGAS-only metrics with no DeepEval
+  equivalent, implemented as DeepEval `GEval` rubrics matching RAGAS's published
+  definitions) — plus `toxicity`, `coherence`, `conciseness` LLM-as-judge metrics
+  (`ToxicityMetric` / `GEval`). All run against `judge_model` via a small
+  `evaluators/deepeval_llm.py` adapter (`LiteLLMDeepEvalModel`), so any litellm-supported
+  provider works, not just OpenAI. **Real `ragas` itself could not be installed**: `ragas`
+  0.4.x hard-imports `langchain_community.chat_models.vertexai`, a module removed when
+  `langchain-community` hit 0.4 (a legacy langchain-0.3-era dependency chain), while this
+  project's `litellm`/`instructor` need `openai>=2.20` — no combination of package versions
+  satisfies both, so `deepeval` (which has no such conflict and covers most of the same
+  ground) is used instead.
 - **Synthetic dataset generation**: `POST /api/datasets/{id}/generate` uses the dataset's own
   rows as seeds and an LLM to produce `variation` (realistic paraphrases) or `adversarial`
   (edge cases / prompt injection) rows as a new dataset version.
@@ -211,7 +229,8 @@ See top of this repo for `backend/` (FastAPI + Celery + SDK), `frontend/` (Next.
 
 Built and working: ingestion (SDK + LangChain/LangGraph + OpenAI-client-patch + LiteLLM-proxy
 zero-code tracing + minimal OTLP/HTTP JSON endpoint), dataset upload/versioning/synthetic
-generation, eval engine (10 built-in metrics + custom-metric hook), prompt versioning +
+generation, eval engine (17 built-in metrics, several backed by real RAGAS-equivalent/DeepEval
+implementations, + custom-metric hook), prompt versioning +
 playground + promotion, experiments with significance testing, webhooks, cost/latency
 analytics, human annotation queue with Cohen's kappa, organizations/projects/RBAC (every
 resource — traces, datasets, prompts, eval runs, experiments, annotations — is scoped to a
