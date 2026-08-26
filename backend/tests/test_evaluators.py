@@ -31,15 +31,17 @@ def test_hallucination_no_context_returns_zero():
     assert HallucinationEvaluator().score(input="q", output="a", expected_output=None, context=None, judge_model="x") == 0.0
 
 
-@patch("evaluators.faithfulness.ask_judge", return_value=0.8)
-def test_faithfulness_with_context_calls_judge(mock_ask):
+@patch("evaluators.faithfulness.FaithfulnessMetric")
+def test_faithfulness_with_context_calls_deepeval_metric(mock_metric_cls):
+    mock_metric_cls.return_value.measure.return_value = 0.8
     score = FaithfulnessEvaluator().score(input="q", output="a", expected_output=None, context="ctx", judge_model="x")
     assert score == 0.8
-    mock_ask.assert_called_once()
+    mock_metric_cls.return_value.measure.assert_called_once()
 
 
-@patch("evaluators.relevance.ask_judge", return_value=0.5)
-def test_answer_relevance_calls_judge(mock_ask):
+@patch("evaluators.relevance.AnswerRelevancyMetric")
+def test_answer_relevance_calls_deepeval_metric(mock_metric_cls):
+    mock_metric_cls.return_value.measure.return_value = 0.5
     score = AnswerRelevanceEvaluator().score(input="q", output="a", expected_output=None, context=None, judge_model="x")
     assert score == 0.5
-    mock_ask.assert_called_once()
+    mock_metric_cls.return_value.measure.assert_called_once()

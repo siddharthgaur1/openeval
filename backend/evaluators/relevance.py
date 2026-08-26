@@ -1,22 +1,19 @@
+from deepeval.metrics import AnswerRelevancyMetric
+from deepeval.test_case import LLMTestCase
+
 from evaluators.base import Evaluator
-from evaluators.llm_judge import ask_judge
-
-PROMPT = """You are evaluating how relevant an AI answer is to the question asked.
-
-Question:
-{input}
-
-Answer:
-{output}
-
-Respond with ONLY a JSON object: {{"score": <float 0-1>, "reason": "<short reason>"}}
-1.0 = directly and completely answers the question, 0.0 = off-topic or non-responsive.
-"""
+from evaluators.deepeval_llm import LiteLLMDeepEvalModel
 
 
 class AnswerRelevanceEvaluator(Evaluator):
+    """How relevant is the answer to the question? Backed by DeepEval's
+    AnswerRelevancyMetric (extracts statements from the answer, judges each
+    against the question), not a hand-rolled prompt.
+    """
+
     name = "answer_relevance"
 
     def score(self, *, input, output, expected_output, context, judge_model) -> float:
-        prompt = PROMPT.format(input=input, output=output)
-        return ask_judge(judge_model, prompt)
+        metric = AnswerRelevancyMetric(model=LiteLLMDeepEvalModel(judge_model), include_reason=False, async_mode=False)
+        test_case = LLMTestCase(input=input, actual_output=output)
+        return metric.measure(test_case)
