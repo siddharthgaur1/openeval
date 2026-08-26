@@ -1,8 +1,15 @@
 # OpenEval
 
-Self-hostable LLM evaluation & observability platform. Trace every LLM call,
-version your prompts and datasets, run evals with an LLM judge, and catch
-regressions before they ship.
+![Python](https://img.shields.io/badge/python-3.11%2B-blue)
+![FastAPI](https://img.shields.io/badge/FastAPI-async-009688)
+![Next.js](https://img.shields.io/badge/Next.js-14-black)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1)
+![Celery](https://img.shields.io/badge/Celery-5-37814A)
+![License: MIT](https://img.shields.io/badge/license-MIT-green)
+
+Self-hosted LangSmith/Helicone alternative: trace every LLM call, version prompts and
+datasets, run RAG/LLM-judge evals against any provider, and block regressions in CI —
+one `docker compose up`, no vendor lock-in.
 
 ## Architecture
 
@@ -224,6 +231,34 @@ when you've supplied your own provider key in `infra/.env`.
 See top of this repo for `backend/` (FastAPI + Celery + SDK), `frontend/` (Next.js),
 `infra/` (docker-compose, k8s starting points, Prometheus scrape config), `evals/`
 (example datasets), `.github/` (CI + PR eval action).
+
+## Why I built it this way
+
+- **LiteLLM everywhere a model gets called** (evals, SDK tracing, zero-code proxy) instead of
+  an OpenAI-only client. Provider is a config string, not a code path — swapping
+  `openai/gpt-4o` for `ollama/llama3` or `anthropic/claude-*` needs no code change, which is
+  the whole point of an eval platform not locking you into one vendor.
+- **`judge_model` defaults to a local Ollama model, not GPT-4.** An eval platform that quietly
+  bills your OpenAI account on `docker compose up` is a bad first impression. Point it at a
+  paid provider explicitly once you've supplied your own key.
+- **DeepEval instead of RAGAS for RAG/LLM-judge metrics**, even though RAGAS was the original
+  target: real `ragas` 0.4.x hard-imports `langchain_community.chat_models.vertexai`, a module
+  removed when `langchain-community` hit 0.4, while this project's `litellm`/`instructor` need
+  `openai>=2.20` — no combination of package versions resolves both. Rather than vendor a
+  patched fork or freeze the rest of the stack to a legacy langchain, DeepEval covers the same
+  ground (including RAGAS-equivalent contextual precision/recall) with no such conflict. The
+  two metrics with no DeepEval equivalent (`context_entity_recall`, `noise_robustness`) are
+  implemented as GEval rubrics matching RAGAS's published definitions instead of skipping them.
+- **Celery for eval runs, not a background `asyncio.Task`.** Eval jobs can run hundreds of rows
+  against a real LLM API and take minutes; that needs to survive an API process restart and be
+  independently scalable (see `infra/k8s/worker/hpa.yaml`), which a request-scoped async task
+  doesn't give you.
+- **SSE for eval progress, not WebSockets.** Progress is one-directional (server → client) and
+  HTTP-cacheable/proxy-friendly; a full-duplex socket buys nothing here for real cost.
+- **Every resource scoped to a project from the start** (`api/rbac.py:check_project_role`)
+  rather than bolted onto a single-tenant schema later — multi-tenancy retrofits are where
+  authorization bugs live, so traces/datasets/prompts/evals were designed against
+  organization → project → role from the first migration that needed them.
 
 ## What's scaffolded vs. stubbed
 
