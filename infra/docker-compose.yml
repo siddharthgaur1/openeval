@@ -47,7 +47,7 @@ services:
     volumes:
       - prometheus_multiproc:/tmp/prometheus-multiproc
     ports:
-      - "8001:8000"
+      - "8000:8000"
     depends_on:
       postgres:
         condition: service_healthy
@@ -81,9 +81,9 @@ services:
     build:
       context: ../frontend
       args:
-        NEXT_PUBLIC_API_URL: http://localhost:8001
+        NEXT_PUBLIC_API_URL: http://localhost:8000
     ports:
-      - "3002:3000"
+      - "3000:3000"
     depends_on:
       - backend
 
