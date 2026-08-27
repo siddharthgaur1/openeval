@@ -57,14 +57,15 @@ def invite_member(organization_id: UUID, payload: InviteMemberRequest, db: Sessi
     db.add(membership)
     db.commit()
     db.refresh(membership)
-    return membership
+    return MembershipOut(id=membership.id, user_id=membership.user_id, email=invitee.email, role=membership.role)
 
 
 @router.get("/{organization_id}/members", response_model=list[MembershipOut])
 def list_members(organization_id: UUID, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     if not get_membership(db, current_user.id, organization_id):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Not a member of this organization")
-    return db.query(Membership).filter(Membership.organization_id == organization_id).all()
+    rows = db.query(Membership, User.email).join(User, User.id == Membership.user_id).filter(Membership.organization_id == organization_id).all()
+    return [MembershipOut(id=m.id, user_id=m.user_id, email=email, role=m.role) for m, email in rows]
 
 
 @router.post("/{organization_id}/projects", response_model=ProjectOut, status_code=status.HTTP_201_CREATED)

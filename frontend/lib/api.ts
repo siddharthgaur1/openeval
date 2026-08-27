@@ -36,6 +36,21 @@ export type Project = {
   created_at: string;
 };
 
+export type OrgMember = {
+  id: string;
+  user_id: string;
+  email: string;
+  role: string;
+};
+
+export type ApiKey = {
+  id: string;
+  name: string;
+  key: string | null;
+  prefix: string;
+  scope: "read" | "write" | "admin";
+};
+
 export type Trace = {
   id: string;
   project_id: string;
@@ -193,7 +208,23 @@ export const api = {
   myProjects: () => apiFetch<Project[]>("/projects"),
   defaultProject: () => apiFetch<Project>("/projects/default"),
 
-  traces: async () => apiFetch<Trace[]>(`/traces?project_id=${await activeProjectId()}`),
+  orgMembers: async () => {
+    const project = await api.defaultProject();
+    return apiFetch<OrgMember[]>(`/organizations/${project.organization_id}/members`);
+  },
+
+  apiKeys: () => apiFetch<ApiKey[]>("/auth/api-keys"),
+  createApiKey: (name: string, scope: "read" | "write" | "admin") =>
+    apiFetch<ApiKey>("/auth/api-keys", { method: "POST", body: JSON.stringify({ name, scope }) }),
+  revokeApiKey: (id: string) => apiFetch<void>(`/auth/api-keys/${id}`, { method: "DELETE" }),
+
+  traces: async (filters: { search?: string; model?: string; hasError?: boolean; limit?: number } = {}) => {
+    const params = new URLSearchParams({ project_id: await activeProjectId(), limit: String(filters.limit ?? 200) });
+    if (filters.search) params.set("search", filters.search);
+    if (filters.model) params.set("model", filters.model);
+    if (filters.hasError) params.set("has_error", "true");
+    return apiFetch<Trace[]>(`/traces?${params}`);
+  },
   traceStats: async () => apiFetch<TraceStats>(`/traces/stats?project_id=${await activeProjectId()}`),
   trace: (id: string) => apiFetch<Trace>(`/traces/${id}`),
   submitFeedback: (id: string, score: number, comment?: string) =>

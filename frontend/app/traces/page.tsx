@@ -1,27 +1,32 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, Trace } from "@/lib/api";
 
 export default function TracesPage() {
-  const { data: traces, isLoading, error } = useQuery({ queryKey: ["traces"], queryFn: api.traces });
-  const { data: stats } = useQuery({ queryKey: ["trace-stats"], queryFn: api.traceStats });
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [modelFilter, setModelFilter] = useState("");
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
-  const models = useMemo(() => [...new Set((traces ?? []).map((t) => t.model))], [traces]);
+  // Debounced so search filters server-side (across the whole project, not just
+  // the current page) without firing a request per keystroke.
+  useEffect(() => {
+    const id = setTimeout(() => setDebouncedSearch(search), 300);
+    return () => clearTimeout(id);
+  }, [search]);
 
-  const filtered = useMemo(() => {
-    return (traces ?? []).filter((t) => {
-      if (modelFilter && t.model !== modelFilter) return false;
-      if (t.error) return true;
-      if (!search) return true;
-      const haystack = `${t.prompt} ${t.response}`.toLowerCase();
-      return haystack.includes(search.toLowerCase());
-    });
-  }, [traces, search, modelFilter]);
+  const { data: traces, isLoading, error } = useQuery({
+    queryKey: ["traces", debouncedSearch, modelFilter],
+    queryFn: () => api.traces({ search: debouncedSearch || undefined, model: modelFilter || undefined }),
+  });
+  const { data: stats } = useQuery({ queryKey: ["trace-stats"], queryFn: api.traceStats });
+  // Unfiltered fetch just to populate the model dropdown's options.
+  const { data: allTraces } = useQuery({ queryKey: ["traces", "__all__"], queryFn: () => api.traces({}) });
+
+  const models = useMemo(() => [...new Set((allTraces ?? []).map((t) => t.model))], [allTraces]);
+  const filtered = traces ?? [];
 
   if (isLoading) return <p>Loading traces...</p>;
   if (error) return <p className="text-red-400">Failed to load traces: {(error as Error).message}</p>;
@@ -84,7 +89,7 @@ function TraceRow({ trace, expanded, onToggle }: { trace: Trace; expanded: boole
 
   const feedback = useMutation({
     mutationFn: (score: number) => api.submitFeedback(trace.id, score, comment || undefined),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["traces"] }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["traces"], exact: false }),
   });
 
   const existingFeedback = trace.tags?.feedback;

@@ -27,6 +27,7 @@ class APIKey(Base):
     name: Mapped[str] = mapped_column(String, nullable=False)
     hashed_key: Mapped[str] = mapped_column(String, nullable=False)
     prefix: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    scope: Mapped[str] = mapped_column(String, nullable=False, default="write")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
 
     user: Mapped["User"] = relationship(back_populates="api_keys")

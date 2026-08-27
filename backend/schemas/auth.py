@@ -1,6 +1,9 @@
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, EmailStr
+
+APIKeyScope = Literal["read", "write", "admin"]
 
 
 class UserCreate(BaseModel):
@@ -28,6 +31,7 @@ class Token(BaseModel):
 
 class APIKeyCreate(BaseModel):
     name: str
+    scope: APIKeyScope = "write"
 
 
 class APIKeyOut(BaseModel):
@@ -35,6 +39,7 @@ class APIKeyOut(BaseModel):
     name: str
     key: str | None = None
     prefix: str
+    scope: str
 
     class Config:
         from_attributes = True

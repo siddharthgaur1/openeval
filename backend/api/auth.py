@@ -51,17 +51,18 @@ def create_api_key(payload: APIKeyCreate, db: Session = Depends(get_db), current
         name=payload.name,
         hashed_key=hash_api_key(raw_key),
         prefix=raw_key[:12],
+        scope=payload.scope,
     )
     db.add(api_key)
     db.commit()
     db.refresh(api_key)
-    return APIKeyOut(id=api_key.id, name=api_key.name, key=raw_key, prefix=api_key.prefix)
+    return APIKeyOut(id=api_key.id, name=api_key.name, key=raw_key, prefix=api_key.prefix, scope=api_key.scope)
 
 
 @router.get("/api-keys", response_model=list[APIKeyOut])
 def list_api_keys(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     keys = db.query(APIKey).filter(APIKey.user_id == current_user.id).all()
-    return [APIKeyOut(id=k.id, name=k.name, key=None, prefix=k.prefix) for k in keys]
+    return [APIKeyOut(id=k.id, name=k.name, key=None, prefix=k.prefix, scope=k.scope) for k in keys]
 
 
 @router.delete("/api-keys/{key_id}", status_code=status.HTTP_204_NO_CONTENT)
