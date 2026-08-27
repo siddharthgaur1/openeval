@@ -53,6 +53,7 @@ class InviteMemberRequest(BaseModel):
 class MembershipOut(BaseModel):
     id: UUID
     user_id: UUID
+    email: str
     role: str
 
     class Config:

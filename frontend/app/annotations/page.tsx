@@ -20,6 +20,7 @@ function AssignForm() {
   const [userId, setUserId] = useState("");
   const [criteria, setCriteria] = useState("coherence, toxicity");
   const [ok, setOk] = useState(false);
+  const { data: members } = useQuery({ queryKey: ["org-members"], queryFn: api.orgMembers });
 
   const assign = useMutation({
     mutationFn: () => api.assignAnnotation(traceId, userId, { criteria: criteria.split(",").map((c) => c.trim()).filter(Boolean) }),
@@ -43,8 +44,17 @@ function AssignForm() {
         <input value={traceId} onChange={(e) => setTraceId(e.target.value)} required className="rounded border border-slate-800 bg-slate-900 px-3 py-2 w-72" />
       </div>
       <div>
-        <label className="block text-xs text-slate-400 mb-1">Assign to (user ID)</label>
-        <input value={userId} onChange={(e) => setUserId(e.target.value)} required className="rounded border border-slate-800 bg-slate-900 px-3 py-2 w-72" />
+        <label className="block text-xs text-slate-400 mb-1">Assign to</label>
+        <select value={userId} onChange={(e) => setUserId(e.target.value)} required className="rounded border border-slate-800 bg-slate-900 px-3 py-2 w-72">
+          <option value="" disabled>
+            Select a teammate...
+          </option>
+          {members?.map((m) => (
+            <option key={m.user_id} value={m.user_id}>
+              {m.email} ({m.role})
+            </option>
+          ))}
+        </select>
       </div>
       <div>
         <label className="block text-xs text-slate-400 mb-1">Rubric criteria (comma-separated)</label>
@@ -144,6 +154,7 @@ function KappaCalculator() {
   const [a, setA] = useState("");
   const [b, setB] = useState("");
   const [result, setResult] = useState<KappaResult | null>(null);
+  const { data: members } = useQuery({ queryKey: ["org-members"], queryFn: api.orgMembers });
 
   const compute = useMutation({
     mutationFn: () => api.kappa(criterion, a, b),
@@ -159,12 +170,26 @@ function KappaCalculator() {
           <input value={criterion} onChange={(e) => setCriterion(e.target.value)} className="rounded border border-slate-800 bg-slate-900 px-3 py-2" />
         </div>
         <div>
-          <label className="block text-xs text-slate-400 mb-1">Annotator A (user ID)</label>
-          <input value={a} onChange={(e) => setA(e.target.value)} className="rounded border border-slate-800 bg-slate-900 px-3 py-2 w-64" />
+          <label className="block text-xs text-slate-400 mb-1">Annotator A</label>
+          <select value={a} onChange={(e) => setA(e.target.value)} className="rounded border border-slate-800 bg-slate-900 px-3 py-2 w-64">
+            <option value="">Select...</option>
+            {members?.map((m) => (
+              <option key={m.user_id} value={m.user_id}>
+                {m.email}
+              </option>
+            ))}
+          </select>
         </div>
         <div>
-          <label className="block text-xs text-slate-400 mb-1">Annotator B (user ID)</label>
-          <input value={b} onChange={(e) => setB(e.target.value)} className="rounded border border-slate-800 bg-slate-900 px-3 py-2 w-64" />
+          <label className="block text-xs text-slate-400 mb-1">Annotator B</label>
+          <select value={b} onChange={(e) => setB(e.target.value)} className="rounded border border-slate-800 bg-slate-900 px-3 py-2 w-64">
+            <option value="">Select...</option>
+            {members?.map((m) => (
+              <option key={m.user_id} value={m.user_id}>
+                {m.email}
+              </option>
+            ))}
+          </select>
         </div>
         <button disabled={compute.isPending} onClick={() => compute.mutate()} className="rounded bg-slate-800 hover:bg-slate-700 px-4 py-2 text-sm">
           Compute

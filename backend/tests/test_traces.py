@@ -4,11 +4,32 @@ from uuid import uuid4
 import pytest
 from fastapi import HTTPException
 
-from api.traces import export_traces_as_dataset, submit_feedback
+from api import traces as traces_api
+from api.traces import export_traces_as_dataset, list_traces, submit_feedback
 from models.project import Project
 from models.organization import Membership
 from models.trace import Trace
 from schemas.trace import FeedbackRequest, TraceExportRequest
+
+
+def test_list_traces_applies_tag_filter_before_pagination(monkeypatch):
+    """Regression test: the tag filter used to be applied in Python *after*
+    limit/offset had already truncated the query, so a tag match past the
+    first page was silently dropped instead of being returned on a later page."""
+    monkeypatch.setattr(traces_api, "check_project_role", lambda *a, **k: MagicMock())
+    project_id = uuid4()
+    tagged = [MagicMock(id=uuid4(), tags={"env": "prod"}) for _ in range(3)]
+    untagged = [MagicMock(id=uuid4(), tags={}) for _ in range(5)]
+    # Simulate real ordering: newest first, tagged traces interleaved past
+    # where a limit=2 page would have cut off if tag filtering ran after it.
+    all_traces = untagged[:2] + [tagged[0]] + untagged[2:4] + [tagged[1]] + untagged[4:] + [tagged[2]]
+
+    db = MagicMock()
+    db.query.return_value.filter.return_value.order_by.return_value.all.return_value = all_traces
+
+    result = list_traces(project_id=project_id, limit=2, offset=0, tag="prod", db=db, current_user=MagicMock())
+
+    assert result == tagged[:2]
 
 
 def test_submit_feedback_merges_into_tags_without_mutating_in_place():

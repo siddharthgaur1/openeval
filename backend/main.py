@@ -1,3 +1,4 @@
+import logging
 import os
 
 from fastapi import FastAPI, Response
@@ -5,6 +6,17 @@ from fastapi.middleware.cors import CORSMiddleware
 from prometheus_fastapi_instrumentator import Instrumentator
 
 from api import api_router
+from core.config import settings
+
+logger = logging.getLogger("openeval")
+
+if settings.jwt_secret == "change-me-in-prod":
+    # Not a hard failure - a fresh `docker compose up` should still boot - but this
+    # default key means anyone can forge a valid access token, so make it loud.
+    logger.warning(
+        "JWT_SECRET is unset and using the insecure default. Set a real secret "
+        "before exposing this deployment beyond localhost (see infra/k8s/secret.example.yaml)."
+    )
 
 app = FastAPI(title="OpenEval API", version="0.1.0")
 

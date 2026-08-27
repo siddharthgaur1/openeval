@@ -1,6 +1,8 @@
+from datetime import datetime
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from api.deps import get_current_user
@@ -40,15 +42,52 @@ def list_traces(
     limit: int = 50,
     offset: int = 0,
     tag: str | None = None,
+    model: str | None = None,
+    search: str | None = None,
+    has_error: bool | None = None,
+    min_latency_ms: float | None = None,
+    max_latency_ms: float | None = None,
+    min_cost_usd: float | None = None,
+    max_cost_usd: float | None = None,
+    created_after: datetime | None = None,
+    created_before: datetime | None = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     check_project_role(db, current_user.id, project_id, "viewer")
     query = db.query(Trace).filter(Trace.project_id == project_id)
-    traces = query.order_by(Trace.created_at.desc()).offset(offset).limit(limit).all()
+
+    if model:
+        query = query.filter(Trace.model == model)
+    if search:
+        like = f"%{search}%"
+        query = query.filter(or_(Trace.prompt.ilike(like), Trace.response.ilike(like)))
+    if has_error is not None:
+        query = query.filter(Trace.error.isnot(None) if has_error else Trace.error.is_(None))
+    if min_latency_ms is not None:
+        query = query.filter(Trace.latency_ms >= min_latency_ms)
+    if max_latency_ms is not None:
+        query = query.filter(Trace.latency_ms <= max_latency_ms)
+    if min_cost_usd is not None:
+        query = query.filter(Trace.cost_usd >= min_cost_usd)
+    if max_cost_usd is not None:
+        query = query.filter(Trace.cost_usd <= max_cost_usd)
+    if created_after:
+        query = query.filter(Trace.created_at >= created_after)
+    if created_before:
+        query = query.filter(Trace.created_at <= created_before)
+
+    query = query.order_by(Trace.created_at.desc())
+
     if tag:
-        traces = [t for t in traces if tag in (t.tags or {}).values() or tag in (t.tags or {})]
-    return traces
+        # ponytail: filtered in Python instead of a Postgres jsonb @> query -
+        # simpler and portable, at the cost of loading every one of this
+        # project's traces when a tag filter is used. Fine at project scale;
+        # revisit if a single project's trace volume makes this the bottleneck.
+        traces = [t for t in query.all() if tag in (t.tags or {}).values() or tag in (t.tags or {})]
+        return traces[offset : offset + limit]
+
+    return query.offset(offset).limit(limit).all()
 
 
 @router.get("/stats", response_model=TraceStats)

@@ -1,0 +1,38 @@
+# Minimal starting point - not a full production manifest. Fill in your registry
+# image before applying.
+#
+# NEXT_PUBLIC_API_URL is inlined into the JS bundle at `next build` time (see
+# frontend/Dockerfile), so it can't be set here via env/envFrom like the backend -
+# it must be baked in when you build/push the image, e.g.:
+#   docker build --build-arg NEXT_PUBLIC_API_URL=https://api.your-domain.com \
+#     -t your-registry/openeval-frontend:latest frontend/
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: openeval-frontend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: openeval-frontend
+  template:
+    metadata:
+      labels:
+        app: openeval-frontend
+    spec:
+      containers:
+        - name: frontend
+          image: your-registry/openeval-frontend:latest
+          ports:
+            - containerPort: 3000
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: openeval-frontend
+spec:
+  selector:
+    app: openeval-frontend
+  ports:
+    - port: 80
+      targetPort: 3000

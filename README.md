@@ -270,26 +270,31 @@ playground + promotion, experiments with significance testing, webhooks, cost/la
 analytics, human annotation queue with Cohen's kappa, organizations/projects/RBAC (every
 resource — traces, datasets, prompts, eval runs, experiments, annotations — is scoped to a
 project and every route checks the caller's role via `require_role`/`check_project_role`),
-Redis rate limiting, SSE eval progress, Prometheus self-monitoring + Grafana dashboards, JWT +
-API key auth, trace feedback (thumbs up/down + comment) and bulk trace-to-dataset export.
+Redis rate limiting, SSE eval progress, Prometheus self-monitoring (including the Celery
+worker's own counters, via `PROMETHEUS_MULTIPROC_DIR` multiprocess mode — see
+`core/metrics.py`/`main.py`) + Grafana dashboards, JWT + scoped (read/write/admin) API key
+auth, trace feedback (thumbs up/down + comment), bulk trace-to-dataset export, and a
+server-side-filterable trace list (model/full-text search/error/latency/cost/date range, not
+just whatever the current page happens to contain).
 
 Frontend (Next.js, `frontend/app/`): login/register, an overview dashboard (traces
 today/week, error rate, cost trend, top models, recent runs), a searchable/filterable trace
 explorer with inline feedback, dataset management (create/upload/synthetic generation/row
 viewer), prompt management (versioning, promote-to-production, playground, unified diff
 between versions), eval run creation + live SSE progress, experiment comparison (metric
-deltas, significance markers, per-row regressions), an annotation queue + Cohen's kappa
-calculator, and cost/latency analytics charts.
+deltas, significance markers, per-row regressions), an annotation queue (assignee/annotator
+pickers backed by `GET /organizations/{id}/members`, not raw user IDs) + Cohen's kappa
+calculator, cost/latency analytics charts, and a Settings page to create/revoke scoped API
+keys.
 
-Stubbed as a starting point only (not production-hardened): `infra/k8s/*.yaml` (no
-secrets management beyond a placeholder `secretRef`; the worker HPA needs KEDA installed
-in-cluster — see the comment in `infra/k8s/worker/hpa.yaml`), the Celery worker's own
-Prometheus metrics (see the ponytail note in `core/metrics.py` — needs
-`PROMETHEUS_MULTIPROC_DIR` multiprocess mode), assigning annotations/computing kappa from the
-UI takes raw user IDs (there's no user-directory endpoint yet to pick a teammate from a list),
-and the prompt diff viewer/synthetic-data UI use small dependency-free implementations
-(a line-diff and manual JSON forms) rather than Monaco/react-diff-viewer from the original
-spec — swap in later if richer editing is worth the added JS payload.
+Stubbed as a starting point only (not production-hardened): `infra/k8s/*.yaml` (secrets
+documented in `infra/k8s/secret.example.yaml` as a template to fill in and apply yourself, or
+better, generate via a real secrets manager — Sealed Secrets / External Secrets Operator /
+SOPS — rather than `kubectl apply` of plaintext `stringData`; the worker HPA needs KEDA
+installed in-cluster — see the comment in `infra/k8s/worker/hpa.yaml`), and the prompt diff
+viewer/synthetic-data UI use small dependency-free implementations (a line-diff and manual
+JSON forms) rather than Monaco/react-diff-viewer from the original spec — swap in later if
+richer editing is worth the added JS payload.
 
 ## Testing
 

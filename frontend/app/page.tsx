@@ -6,7 +6,7 @@ import { ResponsiveContainer, Line, LineChart } from "recharts";
 import { api } from "@/lib/api";
 
 export default function Home() {
-  const { data: traces, isLoading: tracesLoading } = useQuery({ queryKey: ["traces"], queryFn: api.traces });
+  const { data: traces, isLoading: tracesLoading } = useQuery({ queryKey: ["traces", "__all__"], queryFn: () => api.traces({}) });
   const { data: stats, isLoading: statsLoading } = useQuery({ queryKey: ["trace-stats"], queryFn: api.traceStats });
   const { data: cost } = useQuery({ queryKey: ["analytics-cost"], queryFn: api.costAnalytics });
   const { data: runs } = useQuery({ queryKey: ["eval-runs"], queryFn: api.evalRuns });
