@@ -11,6 +11,16 @@ Self-hosted LangSmith/Helicone alternative: trace every LLM call, version prompt
 datasets, run RAG/LLM-judge evals against any provider, and block regressions in CI —
 one `docker compose up`, no vendor lock-in.
 
+## Screenshots
+
+| Overview dashboard | Trace explorer |
+|---|---|
+| ![Overview dashboard](docs/screenshots/overview.png) | ![Trace explorer with filters and cost/latency stats](docs/screenshots/traces.png) |
+
+| Eval runs (17 built-in metrics) |
+|---|
+| ![Eval run creation with the full metric catalog](docs/screenshots/eval-runs.png) |
+
 ## Architecture
 
 ```

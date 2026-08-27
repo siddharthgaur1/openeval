@@ -17,3 +17,7 @@ htmlcov/
 # Next.js build artifacts
 *.tsbuildinfo
 next-env.d.ts
+
+*.log
+.vscode/
+.idea/
