@@ -47,7 +47,7 @@ services:
     volumes:
       - prometheus_multiproc:/tmp/prometheus-multiproc
     ports:
-      - "8000:8000"
+      - "8001:8000"
     depends_on:
       postgres:
         condition: service_healthy
@@ -65,6 +65,7 @@ services:
       DATABASE_URL: postgresql://openeval:openeval@postgres:5432/openeval
       REDIS_URL: redis://redis:6379/0
       PROMETHEUS_MULTIPROC_DIR: /tmp/prometheus-multiproc
+      OLLAMA_API_BASE: http://host.docker.internal:11434
     volumes:
       - prometheus_multiproc:/tmp/prometheus-multiproc
     depends_on:
@@ -77,11 +78,12 @@ services:
     command: celery -A workers.celery_app worker --loglevel=info -Q evals
 
   frontend:
-    build: ../frontend
-    environment:
-      NEXT_PUBLIC_API_URL: http://localhost:8000
+    build:
+      context: ../frontend
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:8001
     ports:
-      - "3000:3000"
+      - "3002:3000"
     depends_on:
       - backend
 
