@@ -5,7 +5,15 @@ services:
     plan: free
     dockerfilePath: ./backend/Dockerfile
     dockerContext: ./backend
-    dockerCommand: sh -c "alembic upgrade head && uvicorn main:app --host 0.0.0.0 --port 8000"
+    # Free Render plans don't offer a separate Background Worker service, so
+    # the Celery worker runs as a second process in this same container
+    # instead of its own service - `wait` keeps the container alive on the
+    # worker's exit status too, not just uvicorn's.
+    dockerCommand: >
+      sh -c "alembic upgrade head &&
+      celery -A workers.celery_app worker --loglevel=info -Q evals &
+      uvicorn main:app --host 0.0.0.0 --port 8000 &
+      wait -n"
     healthCheckPath: /health
     envVars:
       - key: DATABASE_URL
@@ -14,25 +22,6 @@ services:
         sync: false
       - key: JWT_SECRET
         generateValue: true
-      - key: JUDGE_MODEL
-        value: groq/llama-3.1-8b-instant
-      - key: GROQ_API_KEY
-        sync: false
-
-  - type: worker
-    name: openeval-celery-worker
-    runtime: docker
-    plan: free
-    dockerfilePath: ./backend/Dockerfile
-    dockerContext: ./backend
-    dockerCommand: celery -A workers.celery_app worker --loglevel=info -Q evals
-    envVars:
-      - key: DATABASE_URL
-        sync: false
-      - key: REDIS_URL
-        sync: false
-      - key: JWT_SECRET
-        sync: false
       - key: JUDGE_MODEL
         value: groq/llama-3.1-8b-instant
       - key: GROQ_API_KEY
