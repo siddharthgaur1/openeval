@@ -18,6 +18,8 @@ one `docker compose up`, no vendor lock-in.
 
 Hosted on Render's free tier — the first request after a period of inactivity may take ~30s to cold-start.
 
+There's no shared demo login — sign up for your own account from the app; it's a real registration against a live Postgres instance, not a mock.
+
 ## Screenshots
 
 | Overview dashboard | Trace explorer |
