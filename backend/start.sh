@@ -1,4 +1,5 @@
-#!/bin/sh
+#!/bin/bash
+# `wait -n` needs bash - /bin/sh is dash on this image and lacks the flag.
 set -e
 
 alembic upgrade head
