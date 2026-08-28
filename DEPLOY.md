@@ -32,7 +32,8 @@ three Render services in one file.
   not direct).
 - **Upstash**: [upstash.com](https://upstash.com) → sign up → Create Database
   (Redis) → copy the `rediss://...` connection string (TLS, note the extra
-  `s`).
+  `s`) and append `?ssl_cert_reqs=none` to it — `redis-py`'s URL parser
+  needs that param explicitly and rejects the request otherwise (see below).
 - **Groq**: [console.groq.com](https://console.groq.com) → API Keys → create
   one. Free tier, no card.
 
@@ -75,10 +76,34 @@ frontend.
   actually run without a local Ollama daemon. No code change needed — the
   eval engine already goes through litellm's `provider/model` string.
 
+## Other bugs found and fixed during the live deploy
+
+These only show up once real traffic hits the deployed services, not from
+reading the code:
+
+- **`ssl_cert_reqs=CERT_NONE` in `REDIS_URL` crashed every authenticated
+  request.** Celery's Kombu layer accepts that value; `redis-py` (used
+  directly for rate limiting, `backend/services/rate_limit.py`) does not —
+  it only recognizes lowercase `none`/`optional`/`required` and raises
+  `RedisError: Invalid SSL Certificate Requirements Flag` otherwise. This
+  surfaced as a CORS error in the browser (a 500 with no
+  `Access-Control-Allow-Origin` header reads as "CORS blocked", not "server
+  crashed") — worth remembering if this ever recurs. Fixed by using
+  `ssl_cert_reqs=none` in the Upstash connection string.
+- **Both `uvicorn` and `next start` ignore Render's assigned `$PORT`.**
+  Render's health check targets the specific port it assigns (observed
+  `10000`) rather than scanning for any open port. Fixed in
+  `backend/start.sh` (`--port "${PORT:-8000}"`) and
+  `frontend/package.json`'s `start` script (`next start -p ${PORT:-3000}`) —
+  not the frontend Dockerfile's `CMD`, since a bare `next` isn't on `PATH`
+  outside of npm's own script execution.
+- Editing an env var or the Docker Command through Render's dashboard
+  sometimes silently didn't save on the first attempt (the field would
+  visually revert). Always reload the page and re-open the field after
+  saving to confirm the value actually persisted before triggering a deploy.
+
 ## What I did NOT do
 
 I didn't create the Render/Neon/Upstash/Groq accounts myself — each requires
 an email you control (and in Render's case, a GitHub OAuth grant to your
-repo). Once you've done step 1, ping me with the three connection strings (or
-paste them straight into Render's blueprint env var prompts) and I can verify
-the deploy, tail logs, and debug anything that fails to boot.
+repo).
