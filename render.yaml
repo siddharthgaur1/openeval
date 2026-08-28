@@ -5,16 +5,18 @@ services:
     plan: free
     dockerfilePath: ./backend/Dockerfile
     dockerContext: ./backend
-    # Render already runs dockerCommand through a shell - wrapping it in our
-    # own extra `sh -c "..."` made the whole string get passed as one
-    # unparsed command name (exit 127, "not found"). preDeployCommand is
-    # Render's own hook for migrations, so it doesn't need chaining here.
-    preDeployCommand: alembic upgrade head
-    # Free Render plans don't offer a separate Background Worker service, so
-    # the Celery worker runs as a second process in this same container
-    # instead of its own service - `wait -n` keeps the container alive on
-    # either process's exit, not just uvicorn's.
-    dockerCommand: celery -A workers.celery_app worker --loglevel=info -Q evals & uvicorn main:app --host 0.0.0.0 --port 8000 & wait -n
+    # Render already runs dockerCommand through a shell - my own extra
+    # `sh -c "..."` wrapper made the whole string get passed as one unparsed
+    # command name (exit 127, "not found"). preDeployCommand would be the
+    # cleaner place for the migration, but it's not available on free-tier
+    # services ("pre-deploy command is not supported for free tier
+    # services"), so it's chained into dockerCommand instead.
+    #
+    # Free Render plans also don't offer a separate Background Worker
+    # service, so the Celery worker runs as a second process in this same
+    # container instead of its own service - `wait -n` keeps the container
+    # alive on either process's exit, not just uvicorn's.
+    dockerCommand: alembic upgrade head && (celery -A workers.celery_app worker --loglevel=info -Q evals & uvicorn main:app --host 0.0.0.0 --port 8000 & wait -n)
     healthCheckPath: /health
     envVars:
       - key: DATABASE_URL
