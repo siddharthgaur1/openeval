@@ -11,6 +11,13 @@ Self-hosted LangSmith/Helicone alternative: trace every LLM call, version prompt
 datasets, run RAG/LLM-judge evals against any provider, and block regressions in CI —
 one `docker compose up`, no vendor lock-in.
 
+## Live Demo
+
+- App: **https://openeval-frontend.onrender.com**
+- API: **https://openeval-backend.onrender.com**
+
+Hosted on Render's free tier — the first request after a period of inactivity may take ~30s to cold-start.
+
 ## Screenshots
 
 | Overview dashboard | Trace explorer |
