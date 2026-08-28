@@ -44,6 +44,3 @@ services:
     plan: free
     dockerfilePath: ./frontend/Dockerfile
     dockerContext: ./frontend
-    dockerBuildArgs:
-      NEXT_PUBLIC_API_URL: https://openeval-backend.onrender.com
-    envVars: []
