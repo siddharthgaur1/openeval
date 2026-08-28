@@ -37,13 +37,13 @@ three Render services in one file.
 
 ## 3. Fix the frontend → backend URL
 
-`render.yaml` guesses the backend's URL as
-`https://openeval-backend.onrender.com` for the frontend's
-`NEXT_PUBLIC_API_URL` build arg. Render only guarantees that hostname if the
-name `openeval-backend` wasn't already taken by someone else. After the
-backend service is live, check its actual URL in the Render dashboard — if it
-differs, update `dockerBuildArgs.NEXT_PUBLIC_API_URL` in `render.yaml` (or set
-it directly in the frontend service's settings) and redeploy the frontend.
+Render's Blueprint spec has no field for passing Docker build args, so
+`frontend/Dockerfile` hardcodes `ARG NEXT_PUBLIC_API_URL`'s default to
+`https://openeval-backend.onrender.com` — that's only correct if the name
+`openeval-backend` wasn't already taken by someone else. After the backend
+service is live, check its actual URL in the Render dashboard — if it
+differs, edit the `ARG` default in `frontend/Dockerfile` and redeploy the
+frontend.
 
 ## Known free-tier trade-offs (accept or upgrade later)
 
