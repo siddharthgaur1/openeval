@@ -1,0 +1,49 @@
+services:
+  - type: web
+    name: openeval-backend
+    runtime: docker
+    plan: free
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    dockerCommand: sh -c "alembic upgrade head && uvicorn main:app --host 0.0.0.0 --port 8000"
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JUDGE_MODEL
+        value: groq/llama-3.1-8b-instant
+      - key: GROQ_API_KEY
+        sync: false
+
+  - type: worker
+    name: openeval-celery-worker
+    runtime: docker
+    plan: free
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    dockerCommand: celery -A workers.celery_app worker --loglevel=info -Q evals
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: JUDGE_MODEL
+        value: groq/llama-3.1-8b-instant
+      - key: GROQ_API_KEY
+        sync: false
+
+  - type: web
+    name: openeval-frontend
+    runtime: docker
+    plan: free
+    dockerfilePath: ./frontend/Dockerfile
+    dockerContext: ./frontend
+    dockerBuildArgs:
+      NEXT_PUBLIC_API_URL: https://openeval-backend.onrender.com
+    envVars: []
