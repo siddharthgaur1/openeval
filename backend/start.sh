@@ -13,5 +13,8 @@ alembic upgrade head
 # free tier's 512MB RAM cap immediately. One process is plenty for demo
 # eval-job volume.
 celery -A workers.celery_app worker --loglevel=info -Q evals --pool=solo --concurrency=1 &
-uvicorn main:app --host 0.0.0.0 --port 8000 &
+# Render assigns its own $PORT (health checks target it specifically, not
+# just any open port) and doesn't set it locally, so default to 8000 to
+# match docker-compose's hardcoded mapping there.
+uvicorn main:app --host 0.0.0.0 --port "${PORT:-8000}" &
 wait -n

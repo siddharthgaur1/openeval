@@ -19,4 +19,7 @@ RUN npm run build
 
 EXPOSE 3000
 
-CMD ["npm", "start"]
+# Render assigns its own $PORT (health checks target it specifically) and
+# `next start` doesn't read that env var on its own - default to 3000 to
+# match docker-compose's hardcoded mapping there.
+CMD ["sh", "-c", "next start -p ${PORT:-3000}"]
