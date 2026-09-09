@@ -6,6 +6,15 @@ from evaluators.hallucination import HallucinationEvaluator
 from evaluators.rag_context import ContextEntityRecallEvaluator, ContextPrecisionEvaluator, ContextRecallEvaluator, NoiseRobustnessEvaluator
 from evaluators.relevance import AnswerRelevanceEvaluator
 from evaluators.semantic_similarity import SemanticSimilarityEvaluator
+from evaluators.trajectory import (
+    TrajectoryBudgetAdherenceEvaluator,
+    TrajectoryErrorRecoveryEvaluator,
+    TrajectoryLoopDetectionEvaluator,
+    TrajectoryReasoningEvaluator,
+    TrajectoryStepEfficiencyEvaluator,
+    TrajectoryTaskCompletionEvaluator,
+    TrajectoryToolSelectionEvaluator,
+)
 
 REGISTRY = {
     e.name: e
@@ -27,6 +36,13 @@ REGISTRY = {
         ToxicityEvaluator(),
         CoherenceEvaluator(),
         ConcisenessEvaluator(),
+        TrajectoryTaskCompletionEvaluator(),
+        TrajectoryToolSelectionEvaluator(),
+        TrajectoryStepEfficiencyEvaluator(),
+        TrajectoryErrorRecoveryEvaluator(),
+        TrajectoryBudgetAdherenceEvaluator(),
+        TrajectoryLoopDetectionEvaluator(),
+        TrajectoryReasoningEvaluator(),
     ]
 }
 
