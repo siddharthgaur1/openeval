@@ -26,7 +26,7 @@ deterministic evaluators handle unusable input.
 
 import json
 
-from evaluators.base import Evaluator
+from evaluators.base import Evaluator, ScoreResult
 
 # ponytail: fixed threshold, matching the harness default. Make it a task-spec
 # field if anyone actually needs to tune it per task.
@@ -56,12 +56,18 @@ def parse_spec(expected_output: str | None) -> dict:
     return spec if isinstance(spec, dict) else {}
 
 
-def _tool_calls(traj: dict) -> list[dict]:
-    return [s for s in traj["steps"] if s.get("step_type") == "tool_call" and s.get("tool_name")]
+def _tool_calls(traj: dict) -> list[tuple[int, dict]]:
+    """(index, step) for every tool call, indexed against the full step list so
+    the index is usable as evidence a reader can look up."""
+    return [(i, s) for i, s in enumerate(traj["steps"]) if s.get("step_type") == "tool_call" and s.get("tool_name")]
 
 
 def _tools_used(traj: dict) -> list[str]:
     return [s["tool_name"] for s in traj["steps"] if s.get("tool_name")]
+
+
+def _steps_calling(traj: dict, tools: set) -> list[int]:
+    return sorted(i for i, s in enumerate(traj["steps"]) if s.get("tool_name") in tools)
 
 
 def _signature(step: dict) -> str:
@@ -107,12 +113,26 @@ class TrajectoryTaskCompletionEvaluator(Evaluator):
         acceptable = spec.get("acceptable_terminal_states") or ["completed"]
         terminal_ok = traj.get("terminal_state") in acceptable
 
+        state = traj.get("terminal_state")
+        state_note = f"terminal state {state!r} " + ("is acceptable" if terminal_ok else f"is not in {acceptable}")
+
         assertions = spec.get("success_assertions") or []
         if not assertions:
-            return float(terminal_ok)
+            return ScoreResult(float(terminal_ok), f"No success assertions declared; {state_note}.",
+                               details={"terminal_state": state, "acceptable_terminal_states": acceptable})
 
-        passed = sum(1 for a in assertions if _check_assertion(a, traj))
-        return 0.4 * float(terminal_ok) + 0.6 * (passed / len(assertions))
+        failed = [a for a in assertions if not _check_assertion(a, traj)]
+        passed = len(assertions) - len(failed)
+        score = 0.4 * float(terminal_ok) + 0.6 * (passed / len(assertions))
+        # A failed "tool_not_called" is the one assertion kind that points at real steps.
+        banned = {v for a in failed for k, v in a.items() if k == "tool_not_called"}
+        return ScoreResult(
+            score,
+            f"{state_note}; {passed}/{len(assertions)} success assertions passed.",
+            evidence=_steps_calling(traj, banned),
+            details={"terminal_state": state, "acceptable_terminal_states": acceptable,
+                     "failed_assertions": failed},
+        )
 
 
 class TrajectoryToolSelectionEvaluator(Evaluator):
@@ -134,7 +154,7 @@ class TrajectoryToolSelectionEvaluator(Evaluator):
 
         expected = set(spec.get("expected_tools") or [])
         if not expected:
-            return 1.0  # nothing declared, nothing to get wrong
+            return ScoreResult(1.0, "No expected_tools declared, so tool choice is unconstrained.")
 
         used = set(_tools_used(traj))
         hits = len(used & expected)
@@ -142,9 +162,27 @@ class TrajectoryToolSelectionEvaluator(Evaluator):
         recall = hits / len(expected)
         f1 = 2 * precision * recall / (precision + recall) if (precision + recall) else 0.0
 
-        if used & set(spec.get("forbidden_tools") or []):
+        forbidden_used = used & set(spec.get("forbidden_tools") or [])
+        if forbidden_used:
             f1 *= 0.5
-        return f1
+
+        missing = sorted(expected - used)
+        unexpected = sorted(used - expected)
+        reasons = [f"called {hits}/{len(expected)} expected tools (precision {precision:.2f}, recall {recall:.2f})"]
+        if missing:
+            reasons.append(f"never called {missing}")
+        if unexpected:
+            reasons.append(f"called unexpected {unexpected}")
+        if forbidden_used:
+            reasons.append(f"halved for calling forbidden {sorted(forbidden_used)}")
+        return ScoreResult(
+            f1,
+            "; ".join(reasons) + ".",
+            evidence=_steps_calling(traj, forbidden_used | set(unexpected)),
+            details={"expected": sorted(expected), "used": sorted(used), "missing": missing,
+                     "unexpected": unexpected, "forbidden_used": sorted(forbidden_used),
+                     "precision": precision, "recall": recall},
+        )
 
 
 class TrajectoryStepEfficiencyEvaluator(Evaluator):
@@ -161,13 +199,24 @@ class TrajectoryStepEfficiencyEvaluator(Evaluator):
         traj = parse_trajectory(output)
         if traj is None:
             return 0.0
-        actual = len(_tool_calls(traj))
+        calls = _tool_calls(traj)
+        actual = len(calls)
         if actual == 0:
-            return 0.0
+            return ScoreResult(0.0, "The agent made no tool calls at all.")
 
         optimal = parse_spec(expected_output).get("optimal_steps") or 10
         ratio = actual / optimal
-        return 1.0 if ratio <= 1.0 else max(0.0, 2.0 - ratio)
+        if ratio <= 1.0:
+            return ScoreResult(1.0, f"{actual} tool calls, within the optimal {optimal}.",
+                               details={"actual_steps": actual, "optimal_steps": optimal})
+        # The calls past the optimal count are exactly what the decay is charging for.
+        return ScoreResult(
+            max(0.0, 2.0 - ratio),
+            f"{actual} tool calls against an optimal {optimal} ({ratio:.2f}x); "
+            f"the {actual - optimal} call(s) after the first {optimal} cost the score.",
+            evidence=[i for i, _ in calls[optimal:]],
+            details={"actual_steps": actual, "optimal_steps": optimal, "ratio": ratio},
+        )
 
 
 class TrajectoryErrorRecoveryEvaluator(Evaluator):
@@ -189,10 +238,23 @@ class TrajectoryErrorRecoveryEvaluator(Evaluator):
         steps = traj["steps"]
         failures = [(i, s) for i, s in enumerate(steps) if s.get("error")]
         if not failures:
-            return 1.0
+            return ScoreResult(1.0, "No step failed, so there was nothing to recover from.")
 
-        outcomes = [self._classify(traj, i, s) for i, s in failures]
-        return sum(self._WEIGHTS[o] for o in outcomes) / len(outcomes)
+        outcomes = [(i, s, self._classify(traj, i, s)) for i, s in failures]
+        score = sum(self._WEIGHTS[o] for _, _, o in outcomes) / len(outcomes)
+        tally: dict[str, int] = {}
+        for _, _, o in outcomes:
+            tally[o] = tally.get(o, 0) + 1
+        return ScoreResult(
+            score,
+            f"{len(failures)} failed step(s): "
+            + ", ".join(f"{n} {o.replace(chr(95), chr(32))}" for o, n in sorted(tally.items()))
+            + ".",
+            # Only the failures that were not cleanly recovered cost anything.
+            evidence=[i for i, _, o in outcomes if o != "recovered"],
+            details={"failures": [{"step": i, "tool": s.get("tool_name"), "error": s.get("error"), "outcome": o}
+                                  for i, s, o in outcomes]},
+        )
 
     def _classify(self, traj: dict, position: int, failure: dict) -> str:
         after = traj["steps"][position + 1 :]
@@ -236,20 +298,34 @@ class TrajectoryBudgetAdherenceEvaluator(Evaluator):
 
         budget = parse_spec(expected_output).get("budget") or {}
         axes = [
-            (traj.get("total_tokens") or 0, budget.get("max_tokens")),
-            (traj.get("total_cost_usd") or 0, budget.get("max_cost_usd")),
-            (traj.get("wall_clock_seconds") or 0, budget.get("max_seconds")),
+            ("tokens", traj.get("total_tokens") or 0, budget.get("max_tokens")),
+            ("cost_usd", traj.get("total_cost_usd") or 0, budget.get("max_cost_usd")),
+            ("seconds", traj.get("wall_clock_seconds") or 0, budget.get("max_seconds")),
         ]
-        declared = [(actual, cap) for actual, cap in axes if cap]
+        declared = [(axis, actual, cap) for axis, actual, cap in axes if cap]
         if not declared:
-            return 1.0
+            return ScoreResult(1.0, "No budget declared, so nothing could be exceeded.")
 
         # Under budget is a pass; over budget decays to 0 at twice the cap.
-        parts = [1.0 if actual / cap <= 1.0 else max(0.0, 2.0 - actual / cap) for actual, cap in declared]
-        score = sum(parts) / len(parts)
-        if traj.get("terminal_state") == "budget_exceeded":
+        parts = {axis: (1.0 if actual / cap <= 1.0 else max(0.0, 2.0 - actual / cap)) for axis, actual, cap in declared}
+        score = sum(parts.values()) / len(parts)
+        capped = traj.get("terminal_state") == "budget_exceeded"
+        if capped:
             score = min(score, 0.5)
-        return score
+
+        over = [f"{axis} {actual} over cap {cap}" for axis, actual, cap in declared if actual > cap]
+        if over:
+            reason = "Over budget: " + ", ".join(over) + "."
+        else:
+            reason = ("Within every declared budget: "
+                      + ", ".join(f"{axis} {actual}/{cap}" for axis, actual, cap in declared) + ".")
+        if capped:
+            reason += " Run ended in terminal_state 'budget_exceeded', so the score is capped at 0.5."
+        return ScoreResult(
+            score, reason,
+            details={"axes": [{"axis": a, "actual": v, "cap": c, "score": parts[a]} for a, v, c in declared],
+                     "terminal_state_capped": capped},
+        )
 
 
 class TrajectoryLoopDetectionEvaluator(Evaluator):
@@ -269,15 +345,24 @@ class TrajectoryLoopDetectionEvaluator(Evaluator):
             return 0.0
 
         calls = _tool_calls(traj)
-        by_sig: dict[str, int] = {}
-        for step in calls:
-            sig = _signature(step)
-            by_sig[sig] = by_sig.get(sig, 0) + 1
+        by_sig: dict[str, list[int]] = {}
+        for i, step in calls:
+            by_sig.setdefault(_signature(step), []).append(i)
 
-        looped_steps = sum(n for n in by_sig.values() if n >= LOOP_REPEAT_LIMIT)
+        loops = {sig: idxs for sig, idxs in by_sig.items() if len(idxs) >= LOOP_REPEAT_LIMIT}
+        looped_steps = sum(len(idxs) for idxs in loops.values())
         if not looped_steps:
-            return 1.0
-        return max(0.0, 1.0 - (looped_steps / max(len(calls), 1)) * 1.5)
+            return ScoreResult(1.0, f"No tool call repeated with identical input {LOOP_REPEAT_LIMIT}+ times.")
+        return ScoreResult(
+            max(0.0, 1.0 - (looped_steps / max(len(calls), 1)) * 1.5),
+            f"{looped_steps} of {len(calls)} tool calls were identical repeats: "
+            + ", ".join(f"{sig.split(chr(58), 1)[0]} x{len(idxs)}" for sig, idxs in loops.items())
+            + ".",
+            evidence=sorted(i for idxs in loops.values() for i in idxs),
+            details={"loops": [{"tool": sig.split(":", 1)[0], "count": len(idxs), "steps": idxs}
+                               for sig, idxs in loops.items()],
+                     "total_tool_calls": len(calls)},
+        )
 
 
 class TrajectoryReasoningEvaluator(Evaluator):
@@ -313,4 +398,5 @@ class TrajectoryReasoningEvaluator(Evaluator):
             "0.0 = the agent ignored its own results or acted at random.",
         )
         test_case = LLMTestCase(input=input, actual_output=json.dumps(traj["steps"], default=str))
-        return metric.measure(test_case)
+        # GEval already produces its own rationale; surface it rather than drop it.
+        return ScoreResult(metric.measure(test_case), getattr(metric, "reason", None))

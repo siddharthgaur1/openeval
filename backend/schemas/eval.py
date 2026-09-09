@@ -18,6 +18,8 @@ class EvalResultOut(BaseModel):
     dataset_row_id: UUID
     output: str
     scores: dict
+    # None on rows stored before evaluators could explain themselves.
+    score_details: dict | None = None
     latency_ms: float
     cost_usd: float
 

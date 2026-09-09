@@ -3,6 +3,7 @@ from string import Template
 from sqlalchemy.orm import Session
 
 from evaluators import get_evaluator
+from evaluators.base import explain
 from models.dataset import DatasetRow
 from models.eval import EvalResult, EvalRun
 from models.prompt import PromptTemplate
@@ -22,18 +23,28 @@ def render_prompt_vars(template_str: str, variables: dict) -> str:
     return Template(template_str).safe_substitute(**variables)
 
 
-def run_eval_row(*, judge_model: str, metrics: list[str], row: DatasetRow, output: str) -> dict:
-    scores = {}
+def run_eval_row(*, judge_model: str, metrics: list[str], row: DatasetRow, output: str) -> tuple[dict, dict]:
+    """(scores, details). `scores` stays a plain {metric: float} map so every
+    existing reader keeps working; `details` holds {metric: {reasoning, evidence,
+    details}} for the evaluators that returned a `ScoreResult`, and is empty for
+    the ones that returned a bare float.
+    """
+    scores: dict[str, float] = {}
+    details: dict[str, dict] = {}
     for metric_name in metrics:
         evaluator = get_evaluator(metric_name)
-        scores[metric_name] = evaluator.score(
+        result = evaluator.score(
             input=row.input,
             output=output,
             expected_output=row.expected_output,
             context=row.context,
             judge_model=judge_model,
         )
-    return scores
+        scores[metric_name] = float(result)
+        explanation = explain(result)
+        if explanation:
+            details[metric_name] = explanation
+    return scores, details
 
 
 def summarize_run(db: Session, eval_run: EvalRun) -> dict:
