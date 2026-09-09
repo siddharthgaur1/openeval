@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useParams } from "next/navigation";
 import { api } from "@/lib/api";
@@ -12,6 +13,7 @@ export default function EvalRunDetailPage() {
     queryFn: () => api.evalRun(params.id),
     refetchInterval: (query) => (query.state.data?.status === "running" || query.state.data?.status === "pending" ? 2000 : false),
   });
+  const [expanded, setExpanded] = useState<string | null>(null);
   const progress = useEvalProgress(params.id, run?.status === "running" || run?.status === "pending");
 
   if (isLoading) return <p>Loading...</p>;
@@ -58,6 +60,67 @@ export default function EvalRunDetailPage() {
         p50/p95/p99 latency: {run.summary.p50_latency_ms?.toFixed(0)}ms / {run.summary.p95_latency_ms?.toFixed(0)}ms /{" "}
         {run.summary.p99_latency_ms?.toFixed(0)}ms · total cost ${run.summary.total_cost_usd?.toFixed(4)}
       </div>
+
+      {run.results.length > 0 && (
+        <div className="space-y-3">
+          <h2 className="font-medium">Rows</h2>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-slate-400 border-b border-slate-800">
+                <th className="py-2">#</th>
+                <th>Output</th>
+                <th>Scores</th>
+                <th>Latency</th>
+                <th>Cost</th>
+              </tr>
+            </thead>
+            <tbody>
+              {run.results.map((result, i) => (
+                <tr key={result.id} className="border-b border-slate-900 align-top">
+                  <td className="py-2 text-slate-500">{i + 1}</td>
+                  <td className="max-w-sm whitespace-pre-wrap">{result.output}</td>
+                  <td className="space-y-1">
+                    <div className="flex flex-wrap gap-1">
+                      {Object.entries(result.scores).map(([metric, score]) => {
+                        // score_details is null on rows written before evaluators explained themselves.
+                        const detail = result.score_details?.[metric];
+                        const key = `${result.id}:${metric}`;
+                        const chip = `${metric} ${score.toFixed(3)}`;
+                        return detail ? (
+                          <button
+                            key={metric}
+                            type="button"
+                            onClick={() => setExpanded(expanded === key ? null : key)}
+                            className="rounded bg-slate-800 hover:bg-slate-700 px-2 py-0.5 text-xs underline decoration-dotted"
+                          >
+                            {chip} {expanded === key ? "▾" : "▸"}
+                          </button>
+                        ) : (
+                          <span key={metric} className="rounded bg-slate-800 px-2 py-0.5 text-xs">
+                            {chip}
+                          </span>
+                        );
+                      })}
+                    </div>
+                    {Object.entries(result.score_details ?? {}).map(([metric, detail]) =>
+                      expanded === `${result.id}:${metric}` ? (
+                        <div key={metric} className="rounded border border-slate-800 p-2 text-xs space-y-1">
+                          {detail.reasoning && <p className="text-slate-300">{detail.reasoning}</p>}
+                          {detail.evidence.length > 0 && (
+                            <p className="text-slate-500">Evidence: steps {detail.evidence.join(", ")}</p>
+                          )}
+                        </div>
+                      ) : null,
+                    )}
+                  </td>
+                  <td>{result.latency_ms.toFixed(0)}ms</td>
+                  <td>${result.cost_usd.toFixed(4)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }

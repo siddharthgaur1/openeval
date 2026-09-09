@@ -183,6 +183,19 @@ export type EvalRun = {
   finished_at: string | null;
 };
 
+export type EvalResult = {
+  id: string;
+  dataset_row_id: string;
+  output: string;
+  scores: Record<string, number>;
+  // null on rows stored before evaluators could explain themselves.
+  score_details: Record<string, { reasoning: string | null; evidence: number[]; details: Record<string, unknown> }> | null;
+  latency_ms: number;
+  cost_usd: number;
+};
+
+export type EvalRunDetail = EvalRun & { results: EvalResult[] };
+
 // Every project-scoped resource requires a project_id - resolved once (the
 // caller's default/personal project, auto-provisioned server-side on register)
 // and cached for the tab's lifetime. A project switcher can call api.myProjects()
@@ -231,7 +244,7 @@ export const api = {
     apiFetch<Trace>(`/traces/${id}/feedback`, { method: "POST", body: JSON.stringify({ score, comment }) }),
 
   evalRuns: async () => apiFetch<EvalRun[]>(`/evals?project_id=${await activeProjectId()}`),
-  evalRun: (id: string) => apiFetch<EvalRun>(`/evals/${id}`),
+  evalRun: (id: string) => apiFetch<EvalRunDetail>(`/evals/${id}`),
   createEvalRun: (payload: { name: string; dataset_id: string; prompt_template_id?: string; target_model: string; judge_model?: string; metrics?: string[] }) =>
     apiFetch<EvalRun>("/evals", { method: "POST", body: JSON.stringify(payload) }),
   compareRuns: (runIds: string[]) =>
