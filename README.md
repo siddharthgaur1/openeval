@@ -1,5 +1,6 @@
 # OpenEval
 
+[![CI](https://github.com/siddharthgaur1/openeval/actions/workflows/ci.yml/badge.svg)](https://github.com/siddharthgaur1/openeval/actions/workflows/ci.yml)
 ![Python](https://img.shields.io/badge/python-3.11%2B-blue)
 ![FastAPI](https://img.shields.io/badge/FastAPI-async-009688)
 ![Next.js](https://img.shields.io/badge/Next.js-14-black)
