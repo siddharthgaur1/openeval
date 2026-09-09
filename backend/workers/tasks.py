@@ -27,12 +27,13 @@ def _run_single_row(*, eval_run: EvalRun, template, row):
         cost = completion_cost(completion_response=response)
     except Exception:
         cost = 0.0
-    scores = run_eval_row(judge_model=eval_run.judge_model, metrics=eval_run.metrics, row=row, output=output)
+    scores, score_details = run_eval_row(judge_model=eval_run.judge_model, metrics=eval_run.metrics, row=row, output=output)
     return EvalResult(
         eval_run_id=eval_run.id,
         dataset_row_id=row.id,
         output=output,
         scores=scores,
+        score_details=score_details,
         latency_ms=latency_ms,
         cost_usd=cost,
     )

@@ -223,3 +223,46 @@ def test_trajectory_metrics_are_registered():
         "trajectory_reasoning",
     ]:
         assert get_evaluator(name).name == name
+
+
+# --- reasoning / evidence (the widened contract) ---
+
+
+def test_step_efficiency_evidence_points_at_the_steps_past_optimal():
+    out = traj([call("tool_call", "s") for _ in range(4)])
+    result = score(TrajectoryStepEfficiencyEvaluator(), out, spec(optimal_steps=2))
+    assert result == 0.0
+    assert result.evidence == [2, 3]
+    assert "optimal 2" in result.reasoning
+    assert result.details["actual_steps"] == 4
+
+
+def test_loop_detection_evidence_lists_the_repeated_steps():
+    steps = [call("tool_call", "search", {"q": "x"}) for _ in range(3)] + [call("tool_call", "done")]
+    result = score(TrajectoryLoopDetectionEvaluator(), traj(steps))
+    assert result.evidence == [0, 1, 2]
+    assert result.details["loops"][0] == {"tool": "search", "count": 3, "steps": [0, 1, 2]}
+
+
+def test_tool_selection_evidence_flags_forbidden_calls():
+    steps = [call("tool_call", "search"), call("tool_call", "rm_rf")]
+    result = score(TrajectoryToolSelectionEvaluator(), traj(steps), spec(expected_tools=["search"], forbidden_tools=["rm_rf"]))
+    assert result.evidence == [1]
+    assert "forbidden" in result.reasoning
+
+
+def test_error_recovery_evidence_skips_clean_recoveries():
+    steps = [
+        call("tool_call", "a", error="boom"),
+        call("tool_result", "a"),
+        call("tool_call", "b", error="boom"),
+    ]
+    result = score(TrajectoryErrorRecoveryEvaluator(), traj(steps))
+    assert result.evidence == [2]  # step 0 recovered; step 2 never did
+
+
+def test_bare_float_metrics_carry_no_reasoning():
+    from evaluators.base import explain
+
+    assert explain(get_evaluator("exact_match").score(
+        input="q", output="a", expected_output="a", context=None, judge_model="x")) is None

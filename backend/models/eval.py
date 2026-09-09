@@ -40,6 +40,9 @@ class EvalResult(Base):
     dataset_row_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("dataset_rows.id"), nullable=False)
     output: Mapped[str] = mapped_column(Text, nullable=False, default="")
     scores: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    # {metric: {reasoning, evidence, details}} for evaluators that explain themselves.
+    # Nullable so rows written before this column existed read back as None.
+    score_details: Mapped[dict | None] = mapped_column(JSON, nullable=True, default=dict)
     latency_ms: Mapped[float] = mapped_column(Float, nullable=False, default=0)
     cost_usd: Mapped[float] = mapped_column(Float, nullable=False, default=0)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
