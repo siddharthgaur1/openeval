@@ -13,15 +13,17 @@ bcrypt==4.0.1
 python-multipart==0.0.12
 celery==5.4.0
 redis==5.2.0
-litellm==1.98.0
+litellm==1.100.0
 opentelemetry-api==1.28.0
 opentelemetry-sdk==1.28.0
 scikit-learn==1.5.2
 scipy==1.14.1
-sentence-transformers==3.2.1
+sentence-transformers==6.0.1
 deepeval==4.2.0
-# deepeval pulls instructor, which needs openai>=2.0; litellm 1.98 needs openai>=2.20.
-# Pin explicitly since pip's resolver won't always land here on its own.
+# deepeval pulls instructor, which needs openai>=2.0; litellm 1.100 declares
+# openai<3.0.0,>=2.20.0. The <3.0 cap is therefore load-bearing, not stale: openai 3.x
+# is out (its only breaking change is httpx -> httpx2), but litellm has not allowed it
+# yet, so raising this cap makes the file unresolvable. Revisit when litellm does.
 openai>=2.20,<3.0
 pytest==8.3.3
 pytest-cov==5.0.0

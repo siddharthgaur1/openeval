@@ -5,6 +5,11 @@ on:
 
 jobs:
   eval:
+    # The eval needs a reachable OpenEval backend and a dataset to run against.
+    # Neither is configured on every fork or clone of this repo, and without them
+    # the job failed every pull request on an empty API response. Skip when the
+    # deployment is not configured; run it wherever it is.
+    if: vars.OPENEVAL_API_URL != '' && vars.OPENEVAL_DATASET_ID != ''
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
