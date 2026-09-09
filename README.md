@@ -220,6 +220,15 @@ Requires `OPENEVAL_API_KEY` (and your real provider key) set in `infra/.env`; se
   project's `litellm`/`instructor` need `openai>=2.20` — no combination of package versions
   satisfies both, so `deepeval` (which has no such conflict and covers most of the same
   ground) is used instead.
+- **Trajectory metrics**: score the *sequence of steps* an agent took, not just its final
+  answer — `trajectory_task_completion`, `trajectory_tool_selection` (tool-choice F1, with
+  forbidden tools halving the score), `trajectory_step_efficiency`, `trajectory_error_recovery`,
+  `trajectory_budget_adherence`, `trajectory_loop_detection` (all deterministic/local), plus
+  `trajectory_reasoning` (GEval judge). They use the ordinary evaluator interface: `output` is
+  the agent's recorded run as JSON (`steps`, `terminal_state`, token/cost/time totals) and
+  `expected_output` is the task spec as JSON (`expected_tools`, `optimal_steps`, `budget`,
+  `success_assertions`, ...) — the same field-reinterpretation `regex_match` already uses, so
+  no schema change was needed. See `evaluators/trajectory.py` for both shapes.
 - **Synthetic dataset generation**: `POST /api/datasets/{id}/generate` uses the dataset's own
   rows as seeds and an LLM to produce `variation` (realistic paraphrases) or `adversarial`
   (edge cases / prompt injection) rows as a new dataset version.
