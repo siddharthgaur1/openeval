@@ -46,14 +46,32 @@ runs:
             body['prompt_template_id'] = prompt_id
         print(json.dumps(body))
         ")
-        RUN_ID=$(curl -sf -X POST "${{ inputs.api-url }}/api/evals" \
+        # Report the HTTP status when a call fails. Piping `curl -sf` straight into
+        # python turns every failure -- unset API URL, bad key, a backend still
+        # cold-starting -- into "JSONDecodeError: line 1 column 1", which says nothing.
+        api_call() {
+          local response code
+          response=$(curl -sS -w $'\n%{http_code}' "$@") || {
+            echo "curl failed calling ${{ inputs.api-url }}" >&2
+            return 1
+          }
+          code=${response##*$'\n'}
+          body=${response%$'\n'*}
+          if [ "${code:0:1}" != "2" ]; then
+            echo "OpenEval API returned HTTP $code: $body" >&2
+            return 1
+          fi
+          printf '%s' "$body"
+        }
+
+        RUN_ID=$(api_call -X POST "${{ inputs.api-url }}/api/evals" \
           -H "Authorization: Bearer ${{ inputs.api-key }}" \
           -H "Content-Type: application/json" \
           -d "$BODY" | python3 -c "import json,sys; print(json.load(sys.stdin)['id'])")
 
         ELAPSED=0
         while [ "$ELAPSED" -lt "${{ inputs.timeout-seconds }}" ]; do
-          RESULT=$(curl -sf "${{ inputs.api-url }}/api/evals/$RUN_ID" -H "Authorization: Bearer ${{ inputs.api-key }}")
+          RESULT=$(api_call "${{ inputs.api-url }}/api/evals/$RUN_ID" -H "Authorization: Bearer ${{ inputs.api-key }}")
           STATUS=$(echo "$RESULT" | python3 -c "import json,sys; print(json.load(sys.stdin)['status'])")
           if [ "$STATUS" = "completed" ] || [ "$STATUS" = "failed" ]; then
             echo "$RESULT" > eval_result.json
