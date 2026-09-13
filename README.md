@@ -21,7 +21,7 @@ one `docker compose up`, no vendor lock-in.
 - App: **https://openeval-frontend.onrender.com**
 - API: **https://openeval-backend.onrender.com**
 
-Hosted on Render's free tier — the first request after a period of inactivity may take ~30s to cold-start.
+Hosted on Render's free tier, so an idle backend has to cold-start: on 2026-09-13 the first `/health` request took between 1.5 and 4 minutes to answer. Later requests are fast.
 
 There's no shared demo login — sign up for your own account from the app; it's a real registration against a live Postgres instance, not a mock.
 
@@ -31,9 +31,9 @@ There's no shared demo login — sign up for your own account from the app; it's
 |---|---|
 | ![Overview dashboard](docs/screenshots/overview.png) | ![Trace explorer with filters and cost/latency stats](docs/screenshots/traces.png) |
 
-| Eval runs (17 built-in metrics) |
+| Eval runs (12 of the 24 built-in metrics are selectable in this form) |
 |---|
-| ![Eval run creation with the full metric catalog](docs/screenshots/eval-runs.png) |
+| ![Eval run creation form with its metric checkboxes](docs/screenshots/eval-runs.png) |
 
 ## Architecture
 
@@ -297,7 +297,7 @@ See top of this repo for `backend/` (FastAPI + Celery + SDK), `frontend/` (Next.
 
 Built and working: ingestion (SDK + LangChain/LangGraph + OpenAI-client-patch + LiteLLM-proxy
 zero-code tracing + minimal OTLP/HTTP JSON endpoint), dataset upload/versioning/synthetic
-generation, eval engine (17 built-in metrics, several backed by real RAGAS-equivalent/DeepEval
+generation, eval engine (24 built-in metrics, several backed by real RAGAS-equivalent/DeepEval
 implementations, + custom-metric hook), prompt versioning +
 playground + promotion, experiments with significance testing, webhooks, cost/latency
 analytics, human annotation queue with Cohen's kappa, organizations/projects/RBAC (every
