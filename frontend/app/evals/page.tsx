@@ -12,7 +12,7 @@ const STATUS_COLOR: Record<string, string> = {
   failed: "text-red-400",
 };
 
-const AVAILABLE_METRICS = [
+const DEFAULT_METRICS = [
   "exact_match",
   "f1",
   "answer_relevance",
@@ -27,6 +27,13 @@ const AVAILABLE_METRICS = [
   "conciseness",
 ];
 
+// Unchecked by default: json_validity only makes sense when the prompt asks for JSON,
+// regex_match treats expected_output as the pattern, and semantic_similarity downloads
+// an embedding model on first use.
+const OPT_IN_METRICS = ["semantic_similarity", "bleu", "rouge_l", "json_validity", "regex_match"];
+
+const AVAILABLE_METRICS = [...DEFAULT_METRICS, ...OPT_IN_METRICS];
+
 export default function EvalsPage() {
   const queryClient = useQueryClient();
   const { data: runs, isLoading, error } = useQuery({ queryKey: ["eval-runs"], queryFn: api.evalRuns });
@@ -37,7 +44,7 @@ export default function EvalsPage() {
   const [datasetId, setDatasetId] = useState("");
   const [promptId, setPromptId] = useState("");
   const [targetModel, setTargetModel] = useState("gpt-4o-mini");
-  const [metrics, setMetrics] = useState<string[]>(AVAILABLE_METRICS);
+  const [metrics, setMetrics] = useState<string[]>(DEFAULT_METRICS);
   const [formError, setFormError] = useState<string | null>(null);
 
   const create = useMutation({
@@ -100,6 +107,9 @@ export default function EvalsPage() {
             </label>
           ))}
         </div>
+        <p className="text-xs text-slate-400">
+          The 7 trajectory_* metrics are not listed: they score an agent trajectory JSON, and this form scores the target model&apos;s plain completion.
+        </p>
         <button disabled={create.isPending} type="submit" className="rounded bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 px-4 py-2 text-sm font-medium">
           {create.isPending ? "Starting..." : "Run eval"}
         </button>
