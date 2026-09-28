@@ -31,7 +31,7 @@ There's no shared demo login — sign up for your own account from the app; it's
 |---|---|
 | ![Overview dashboard](docs/screenshots/overview.png) | ![Trace explorer with filters and cost/latency stats](docs/screenshots/traces.png) |
 
-| Eval runs (12 of the 24 built-in metrics are selectable in this form) |
+| Eval runs (the form offers 17 of the 24 built-in metrics — all but the 7 `trajectory_*` ones, which score agent-trajectory JSON rather than a plain completion; this screenshot predates the 5 deterministic additions) |
 |---|
 | ![Eval run creation form with its metric checkboxes](docs/screenshots/eval-runs.png) |
 
