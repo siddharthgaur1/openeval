@@ -196,7 +196,7 @@ Requires `OPENEVAL_API_KEY` (and your real provider key) set in `infra/.env`; se
   limit (`rate_limit_per_minute` in `.env`, default 120/min per user).
 - **Organizations/Projects/RBAC**: `POST /api/organizations` (creator becomes `owner`),
   invite members with a role (`owner`/`admin`/`member`/`viewer`), create projects under an
-  org. `api/rbac.py:require_role(...)` is a reusable dependency for project-scoped routes.
+  org. `api/rbac.py:require_role(...)` is a reusable dependency for project-scoped routes. What each role and API-key scope can do: [docs/rbac.md](docs/rbac.md).
   Each project also has a monthly trace/eval-run quota (`trace_quota_per_month` /
   `eval_run_quota_per_month`, defaults 1M / 1K); `api/rbac.py:check_quota(...)` counts rows
   created since the 1st of the current UTC month and returns 429 once a project hits its
