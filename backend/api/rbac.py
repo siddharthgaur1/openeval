@@ -49,6 +49,14 @@ def has_project_role(db: Session, user_id, project_id, min_role: str) -> bool:
     return True
 
 
+def visible_project_ids(db: Session, user_id):
+    """Scalar subquery of every project id in an organization the user belongs to
+    (any role, i.e. viewer and up) - use as `Model.project_id.in_(...)` to scope a
+    query that can span projects."""
+    org_ids = db.query(Membership.organization_id).filter(Membership.user_id == user_id)
+    return db.query(Project.id).filter(Project.organization_id.in_(org_ids.scalar_subquery())).scalar_subquery()
+
+
 def check_quota(db: Session, project: Project, kind: str) -> None:
     """Enforce the project's monthly trace/eval-run quota (`kind` is 'trace' or
     'eval_run'). Raises 429 once the count of rows created since the 1st of the
