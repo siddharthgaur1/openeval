@@ -40,6 +40,15 @@ def check_project_role(db: Session, user_id, project_id, min_role: str) -> Proje
     return project
 
 
+def has_project_role(db: Session, user_id, project_id, min_role: str) -> bool:
+    """Non-raising check_project_role, for gating a side effect rather than the whole request."""
+    try:
+        check_project_role(db, user_id, project_id, min_role)
+    except HTTPException:
+        return False
+    return True
+
+
 def check_quota(db: Session, project: Project, kind: str) -> None:
     """Enforce the project's monthly trace/eval-run quota (`kind` is 'trace' or
     'eval_run'). Raises 429 once the count of rows created since the 1st of the
