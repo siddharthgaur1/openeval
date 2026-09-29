@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from api.deps import get_current_user
-from api.rbac import check_project_role
+from api.rbac import check_project_role, has_project_role
 from core.database import get_db
 from models.eval import EvalRun
 from models.experiment import Experiment
@@ -100,6 +100,8 @@ def compare_experiment(experiment_id: UUID, regression_threshold: float = 0.05, 
         run_ids = [str(experiment.baseline_run_id)] + [r for r in run_ids if r != str(experiment.baseline_run_id)]
 
     comparison = compare_runs(db, run_ids, regression_threshold)
-    run_project_map = {run_id: experiment.project_id for run_id in run_ids}
-    dispatch_regression_webhooks(db, comparison, run_project_map)
+    # Viewers get the comparison; regression webhooks fire only for member+ (see evals.compare_eval_runs).
+    if has_project_role(db, current_user.id, experiment.project_id, "member"):
+        run_project_map = {run_id: experiment.project_id for run_id in run_ids}
+        dispatch_regression_webhooks(db, comparison, run_project_map)
     return comparison
