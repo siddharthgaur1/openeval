@@ -8,8 +8,9 @@ from sqlalchemy.orm import Mapped, mapped_column
 from core.database import Base
 
 ROLES = ["owner", "admin", "member", "viewer"]
-# owner/admin can manage members and delete the org/project; member can create and run
-# things; viewer is read-only. Enforced by api/rbac.py, not by the DB.
+# owner/admin can manage members and projects, but only an owner can grant or revoke the
+# owner role (services/organization_service.py:check_membership_change); member can create
+# and run things; viewer is read-only. Enforced in the API layer, not by the DB.
 ROLE_RANK = {role: i for i, role in enumerate(reversed(ROLES))}  # viewer=0 ... owner=3
 
 
