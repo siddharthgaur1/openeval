@@ -249,9 +249,21 @@ Requires `OPENEVAL_API_KEY` (and your real provider key) set in `infra/.env`; se
 ## CI/CD integration
 
 `.github/actions/run-eval` is a composite GitHub Action that triggers an eval run against a
-pinned dataset, polls until it finishes, and comments the results on the PR. See
-`.github/workflows/eval-on-pr.yml` for wiring; set repo vars `OPENEVAL_API_URL`,
-`OPENEVAL_DATASET_ID`, `OPENEVAL_TARGET_MODEL` and secret `OPENEVAL_API_KEY`.
+pinned dataset, polls until it finishes, comments the results on the PR, and fails the job
+if the run doesn't complete or a score misses its threshold:
+
+```yaml
+- uses: ./.github/actions/run-eval
+  with:
+    # ...
+    fail-below: f1>=0.8,faithfulness>=0.7,hallucination<=0.2
+```
+
+A metric with a threshold but no score fails too. Thresholds are absolute, not relative to a
+previous run. See `.github/workflows/eval-on-pr.yml` for wiring; set repo vars
+`OPENEVAL_API_URL`, `OPENEVAL_DATASET_ID`, `OPENEVAL_TARGET_MODEL`, `OPENEVAL_FAIL_BELOW` and
+secret `OPENEVAL_API_KEY`. This repo has none of them set, so that workflow is skipped here:
+the gate's logic is covered by `backend/tests/test_action_gate.py`, not by a live eval on each PR.
 
 ## Cost
 
