@@ -13,7 +13,7 @@ bcrypt==4.0.1
 python-multipart==0.0.12
 celery==5.4.0
 redis==5.2.0
-litellm==1.100.0
+litellm==1.100.4
 opentelemetry-api==1.28.0
 opentelemetry-sdk==1.28.0
 scikit-learn==1.5.2
