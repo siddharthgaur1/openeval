@@ -19,3 +19,4 @@ jobs:
           api-key: ${{ secrets.OPENEVAL_API_KEY }}
           dataset-id: ${{ vars.OPENEVAL_DATASET_ID }}
           target-model: ${{ vars.OPENEVAL_TARGET_MODEL }}
+          fail-below: ${{ vars.OPENEVAL_FAIL_BELOW }}

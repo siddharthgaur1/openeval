@@ -1,5 +1,5 @@
 name: "OpenEval Run"
-description: "Trigger an OpenEval eval run via the REST API, wait for completion, and comment results on the PR"
+description: "Trigger an OpenEval eval run via the REST API, comment results on the PR, and fail the job if scores miss their thresholds"
 inputs:
   api-url:
     description: "Base URL of the OpenEval backend"
@@ -18,6 +18,10 @@ inputs:
     description: "Comma-separated metric names"
     required: false
     default: "exact_match,f1,answer_relevance,faithfulness,hallucination"
+  fail-below:
+    description: "Comma-separated thresholds, e.g. f1>=0.8,hallucination<=0.2. A run that doesn't complete always fails."
+    required: false
+    default: ""
   poll-interval-seconds:
     required: false
     default: "5"
@@ -112,3 +116,10 @@ runs:
             issue_number: context.issue.number,
             body,
           });
+
+    - name: Enforce thresholds
+      if: ${{ !cancelled() && steps.eval.outcome == 'success' }}
+      shell: bash
+      env:
+        FAIL_BELOW: ${{ inputs.fail-below }}
+      run: python3 "${{ github.action_path }}/check_thresholds.py" eval_result.json "$FAIL_BELOW"
