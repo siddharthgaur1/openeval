@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from api.deps import get_current_user
-from api.rbac import check_project_role, get_membership
+from api.rbac import check_project_role, get_membership, visible_project_ids
 from core.database import get_db
 from models.annotation import Annotation, AnnotationQueueItem
 from models.dataset import Dataset, DatasetRow
@@ -80,17 +80,17 @@ def submit_annotation(item_id: UUID, payload: SubmitAnnotationRequest, db: Sessi
 
 @router.post("/kappa", response_model=KappaResult)
 def inter_annotator_agreement(payload: KappaRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    a_annotations = {a.trace_id: a.scores.get(payload.criterion) for a in db.query(Annotation).filter(Annotation.annotator_id == payload.annotator_a_id).all()}
-    b_annotations = {a.trace_id: a.scores.get(payload.criterion) for a in db.query(Annotation).filter(Annotation.annotator_id == payload.annotator_b_id).all()}
+    # Annotators can share several projects, so scope every annotation to a trace in a
+    # project the caller can see - checking one sample trace would leak the rest.
+    visible = (
+        db.query(Annotation)
+        .join(Trace, Trace.id == Annotation.trace_id)
+        .filter(Trace.project_id.in_(visible_project_ids(db, current_user.id)))
+    )
+    a_annotations = {a.trace_id: a.scores.get(payload.criterion) for a in visible.filter(Annotation.annotator_id == payload.annotator_a_id).all()}
+    b_annotations = {a.trace_id: a.scores.get(payload.criterion) for a in visible.filter(Annotation.annotator_id == payload.annotator_b_id).all()}
 
     shared_trace_ids = [tid for tid in a_annotations if tid in b_annotations and a_annotations[tid] is not None and b_annotations[tid] is not None]
-    if shared_trace_ids:
-        # Any shared trace's project is enough to establish the caller has visibility
-        # into this comparison - annotators being compared must share a project by
-        # construction (assign_annotation only allows assigning within a project).
-        sample_trace = db.query(Trace).filter(Trace.id == shared_trace_ids[0]).first()
-        if sample_trace:
-            check_project_role(db, current_user.id, sample_trace.project_id, "viewer")
 
     labels_a = [a_annotations[tid] for tid in shared_trace_ids]
     labels_b = [b_annotations[tid] for tid in shared_trace_ids]

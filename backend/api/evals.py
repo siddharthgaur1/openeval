@@ -7,7 +7,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from api.deps import get_current_user
-from api.rbac import check_project_role, check_quota
+from api.rbac import check_project_role, check_quota, has_project_role
 from core.config import settings
 from core.database import get_db
 from core.redis import progress_channel, redis_client
@@ -117,6 +117,8 @@ def compare_eval_runs(payload: CompareRequest, db: Session = Depends(get_db), cu
         check_project_role(db, current_user.id, run.project_id, "viewer")
 
     comparison = compare_runs(db, payload.run_ids, payload.regression_threshold)
-    run_project_map = {str(run.id): run.project_id for run in runs}
+    # Comparing is a read (viewer), but firing regression webhooks is a side effect -
+    # only for projects where the caller could start an eval run (member+).
+    run_project_map = {str(run.id): run.project_id for run in runs if has_project_role(db, current_user.id, run.project_id, "member")}
     dispatch_regression_webhooks(db, comparison, run_project_map)
     return comparison
