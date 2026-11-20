@@ -2,6 +2,7 @@ import "./globals.css";
 import type { Metadata } from "next";
 import { Providers } from "@/lib/providers";
 import { NavBar } from "@/components/NavBar";
+import { WakeBanner } from "@/components/WakeBanner";
 
 export const metadata: Metadata = {
   title: "OpenEval",
@@ -13,6 +14,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en">
       <body className="bg-slate-950 text-slate-100 min-h-screen">
         <Providers>
+          <WakeBanner />
           <NavBar />
           <main className="p-6">{children}</main>
         </Providers>
