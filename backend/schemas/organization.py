@@ -38,9 +38,8 @@ class ProjectOut(BaseModel):
         from_attributes = True
 
 
-class InviteMemberRequest(BaseModel):
-    email: EmailStr
-    role: str = "member"
+class UpdateMemberRoleRequest(BaseModel):
+    role: str
 
     @field_validator("role")
     @classmethod
@@ -48,6 +47,11 @@ class InviteMemberRequest(BaseModel):
         if role not in ROLES:
             raise ValueError(f"role must be one of {ROLES}")
         return role
+
+
+class InviteMemberRequest(UpdateMemberRoleRequest):
+    email: EmailStr
+    role: str = "member"
 
 
 class MembershipOut(BaseModel):

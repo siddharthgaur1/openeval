@@ -201,6 +201,10 @@ Requires `OPENEVAL_API_KEY` (and your real provider key) set in `infra/.env`; se
   `eval_run_quota_per_month`, defaults 1M / 1K); `api/rbac.py:check_quota(...)` counts rows
   created since the 1st of the current UTC month and returns 429 once a project hits its
   limit — enforced on trace ingestion and eval-run creation.
+  Members are managed with `PATCH` / `DELETE /api/organizations/{id}/members/{membership_id}`.
+  Only an `owner` can grant or revoke `owner` (invite, promote, demote, remove); admins can invite
+  admins and manage members and viewers but can't demote or remove another admin; anyone can leave; the
+  last owner can't be demoted or removed (409).
 - **Human annotation**: `POST /api/annotations/assign` queues a trace for a reviewer,
   `POST /api/annotations/queue/{id}/submit` records their scores, `POST /api/annotations/kappa`
   computes Cohen's kappa between two annotators on a criterion, `POST /api/annotations/export`
